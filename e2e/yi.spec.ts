@@ -92,6 +92,14 @@ test("keeps public utility routes free of serious accessibility violations", asy
   }
 });
 
+test("introduces Kaemon Takashima on the About and help page", async ({ page }) => {
+  await useLocale(page, "en");
+  await page.goto("/help");
+  await expect(page.getByRole("heading", { name: "Kaemon Takashima" })).toBeVisible();
+  await expect(page.getByText("Kaemon Takashima (1832–1914)")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Read the Japanese Wikipedia article/ })).toHaveAttribute("href", "https://ja.wikipedia.org/wiki/%E9%AB%98%E5%B3%B6%E5%98%89%E5%8F%B3%E8%A1%9B%E9%96%80");
+});
+
 test("completes the password-reset landing flow and hides unavailable social providers", async ({ page }) => {
   await useLocale(page, "en");
   let resetBody: { newPassword?: string; token?: string } | undefined;

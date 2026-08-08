@@ -13,5 +13,13 @@ export function HelpPage() {
         <div className="principle"><h2>{t("result.sourcePending")}</h2><p>{t("result.sourceBody")}</p></div>
       </aside>
     </div>
+    <section className="takashima-intro" aria-labelledby="takashima-title">
+      <p className="eyebrow">{t("help.takashima.eyebrow")}</p>
+      <div>
+        <h2 id="takashima-title">{t("help.takashima.title")}</h2>
+        <p>{t("help.takashima.body")}</p>
+        <a href="https://ja.wikipedia.org/wiki/%E9%AB%98%E5%B3%B6%E5%98%89%E5%8F%B3%E8%A1%9B%E9%96%80" target="_blank" rel="noreferrer">{t("help.takashima.source")} <span aria-hidden="true">↗</span></a>
+      </div>
+    </section>
   </section>;
 }
