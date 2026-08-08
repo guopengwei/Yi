@@ -114,9 +114,9 @@ export function ReadingPage() {
     </header>
     {reading.safety?.routed && <aside className="safety-card" aria-label="Safety guidance">{reading.safety.limitations.map((item) => <p key={item}>{item}</p>)}</aside>}
     <section className="hexagram-pair glass-panel">
-      <div className="hex-card"><p>{t("result.primary")}</p><span className="hex-symbol">{facts.primary.unicodeSymbol}</span><Hexagram lineValues={lineValuesForPattern(facts.primary.pattern)} label={primaryName} /><h2>{primaryName}</h2><small>King Wen · {facts.primary.kingWenNumber}</small></div>
+      <div className="hex-card"><p>{t("result.primary")}</p><span className="hex-symbol">{facts.primary.unicodeSymbol}</span><Hexagram lineValues={lineValuesForPattern(facts.primary.pattern)} label={primaryName} /><h2>{primaryName}</h2><small>{t("result.kingWenOrder")} · {facts.primary.kingWenNumber}</small></div>
       <div className="change-arrow" aria-hidden>↗</div>
-      <div className="hex-card"><p>{t("result.relating")}</p><span className="hex-symbol">{facts.relating.unicodeSymbol}</span><Hexagram lineValues={lineValuesForPattern(facts.relating.pattern)} label={relatingName} /><h2>{relatingName}</h2><small>King Wen · {facts.relating.kingWenNumber}</small></div>
+      <div className="hex-card"><p>{t("result.relating")}</p><span className="hex-symbol">{facts.relating.unicodeSymbol}</span><Hexagram lineValues={lineValuesForPattern(facts.relating.pattern)} label={relatingName} /><h2>{relatingName}</h2><small>{t("result.kingWenOrder")} · {facts.relating.kingWenNumber}</small></div>
     </section>
     <section className="facts-grid">
       <div className="glass-subpanel"><p className="eyebrow">{t("result.movingLines")}</p><div className="moving-chips">{facts.movingLines.length ? facts.movingLines.map((line) => <span key={line.position}>{i18n.language === "en" ? `${t("cast.line", { n: line.position })} · ${t(line.yinYang === "yin" ? "cast.yin" : "cast.yang")}` : line.lineKey}</span>) : <span>{t("result.none")}</span>}</div>{facts.specialLine && <p>{t(facts.specialLine.lineKey === "用九" ? "specialLine.nine" : "specialLine.six")}</p>}</div>
