@@ -64,29 +64,29 @@ export function HomePage() {
     <section className="hero">
       <div className="hero-copy">
         <p className="eyebrow">{t("hero.eyebrow")}</p>
-        <h1>{String(t("hero.title")).split("\n").map((line, index) => <span key={line}>{line}{index === 0 && <br />}</span>)}</h1>
+        <h1>{String(t("hero.title")).split("\n").map((line) => <span key={line}>{line}</span>)}</h1>
         <p className="hero-body">{t("hero.body")}</p>
-        <button className="button primary" onClick={scrollToComposer}>{t("hero.start")} <span aria-hidden>↘</span></button>
-        <p className="privacy-line"><span aria-hidden>●</span>{t("hero.privacy")}</p>
+        <button className="button primary" onClick={scrollToComposer}>{t("hero.start")}</button>
       </div>
       <div className="hero-visual">
         <picture>
-          <source srcSet="/assets/yi-hero-still-life.webp" type="image/webp" />
-          <img src="/assets/yi-hero-still-life.png" alt={t("hero.imageAlt")} width="1536" height="1024" fetchPriority="high" />
+          <source srcSet="/assets/yi-hero-mineral-v2.webp" type="image/webp" />
+          <img src="/assets/yi-hero-mineral-v2.jpg" alt={t("hero.imageAlt")} width="1536" height="1024" fetchPriority="high" />
         </picture>
-        <span className="hero-caption">{t("hero.caption")}</span>
-      </div>
-      <div className="trust-strip" aria-label="Product principles">
-        <span>01 · {t("trust.deterministic")}</span><span>02 · {t("trust.reviewed")}</span><span>03 · {t("trust.private")}</span>
       </div>
     </section>
 
+    <section className="trust-strip" aria-label={t("trust.label")}>
+      <strong>{t("trust.deterministic")}</strong>
+      <strong>{t("trust.reviewed")}</strong>
+      <div><strong>{t("trust.private")}</strong><span>{t("hero.privacy")}</span></div>
+    </section>
+
     <section className="composer-section" ref={composer}>
-      <div className="composer-heading"><p className="eyebrow">Yi / Cast</p><h2>{phase === "question" ? t("cast.title") : phase === "method" ? t("cast.methodTitle") : phase === "review" ? t("cast.reviewTitle") : t("contribution.title")}</h2></div>
+      <div className="composer-heading"><h2>{phase === "question" ? t("cast.title") : phase === "method" ? t("cast.methodTitle") : phase === "review" ? t("cast.reviewTitle") : t("contribution.title")}</h2></div>
       <div className="progress" role="progressbar" aria-label="Progress" aria-valuemin={1} aria-valuemax={4} aria-valuenow={phase === "question" ? 1 : phase === "method" ? 2 : phase === "review" ? 3 : 4}><span className="done" /><span className={phase !== "question" ? "done" : ""} /><span className={phase === "review" || phase === "contribution" ? "done" : ""} /></div>
 
       {phase === "question" && <div className="glass-panel question-panel">
-        <p className="section-index">01</p>
         <label className="field"><span>{t("cast.title")}</span><textarea maxLength={280} rows={5} value={question} disabled={noQuestion} placeholder={t("cast.questionHint")} onChange={(event) => setQuestion(event.target.value)} /><small>{question.length}/280</small></label>
         <label className="check-row"><input type="checkbox" checked={noQuestion} onChange={(event) => { setNoQuestion(event.target.checked); if (event.target.checked) setQuestion(""); }} /><span>{t("cast.noQuestion")}</span></label>
         <button className="button primary" disabled={!noQuestion && !question.trim()} onClick={() => setPhase("method")}>{t("cast.continue")} <span>→</span></button>
@@ -117,10 +117,9 @@ export function HomePage() {
       </div>}
 
       {phase === "review" && prepared && <div className="glass-panel review-panel">
-        <p className="section-index">02</p>
         <div className="review-grid">
           <Hexagram lineValues={lineValues as LineValue[]} label="Cast lines bottom to top" />
-          <div><p className="eyebrow">{prepared.castingMethod}</p><h3>{t("cast.reviewTitle")}</h3><p className="muted">{t("cast.bottomUp")}</p>
+          <div><p className="method-code">{prepared.castingMethod}</p><h3>{t("cast.reviewTitle")}</h3><p className="muted">{t("cast.bottomUp")}</p>
             <ol className="line-facts">{lineValues.map((value, index) => <li key={index} className={value === 6 || value === 9 ? "moving" : ""}><span>{index + 1}</span>{value === 7 || value === 9 ? t("cast.yang") : t("cast.yin")} · {value === 6 || value === 9 ? t("cast.moving") : t("cast.still")} <b>{value}</b></li>)}</ol>
           </div>
         </div>

@@ -56,7 +56,7 @@ export function AuthPage() {
       {(mode === "signup" || mode === "reset") && <Turnstile action={mode === "signup" ? "signup" : "password_recovery"} onToken={onToken} />}
       {message && <p className="small-status" role="status">{message}</p>}
       <button className="button primary wide" disabled={busy || !email || (mode !== "reset" && password.length < 10) || (mode === "signup" && (!name || !token)) || (mode === "reset" && !token)} onClick={() => void submit()}>{busy ? t("common.loading") : mode === "reset" ? t("auth.reset") : t("auth.submit")}</button>
-      {mode === "signin" && <><button className="text-button" onClick={() => setMode("reset")}>{t("auth.forgot")}</button><div className="or"><span>{t("auth.or")}</span></div><button className="button social" onClick={() => void social("google")}>G · {t("auth.google")}</button><button className="button social" onClick={() => void social("microsoft")}>⊞ · {t("auth.microsoft")}</button></>}
+      {mode === "signin" && <><button className="text-button" onClick={() => setMode("reset")}>{t("auth.forgot")}</button><div className="or"><span>{t("auth.or")}</span></div><button className="button social" onClick={() => void social("google")}>{t("auth.google")}</button><button className="button social" onClick={() => void social("microsoft")}>{t("auth.microsoft")}</button></>}
       {mode === "reset" && <button className="text-button" onClick={() => setMode("signin")}>{t("common.back")}</button>}
     </div>
   </section>;

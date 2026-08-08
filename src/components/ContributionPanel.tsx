@@ -32,7 +32,6 @@ export function ContributionPanel({ readingId, cancelled = false }: { readingId:
     finally { setBusy(false); }
   };
   return <section className="contribution glass-panel" aria-labelledby="contribution-title">
-    <p className="section-index">03</p>
     <h2 id="contribution-title">{t("contribution.title")}</h2>
     <p className="muted max-copy">{t("contribution.body")}</p>
     {cancelled && <p className="notice warm">{t("contribution.cancelled")}</p>}
@@ -52,4 +51,3 @@ export function ContributionPanel({ readingId, cancelled = false }: { readingId:
     </button>
   </section>;
 }
-

@@ -46,6 +46,7 @@ test("completes a reviewed three-number cast with HK$0", async ({ page }) => {
 test("has no serious accessibility violations on the primary landing view", async ({ page }) => {
   await useLocale(page, "en");
   await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.evaluate(axe.source);
   const violations = await page.evaluate(async () => {
     const axe = (window as unknown as { axe: { run: (root: Document) => Promise<{ violations: Array<{ id: string; impact: string | null }> }> } }).axe;
@@ -58,6 +59,7 @@ test("keeps public utility routes free of serious accessibility violations", asy
   await useLocale(page, "en");
   for (const route of ["/help", "/settings", "/auth", "/privacy", "/terms"]) {
     await page.goto(route);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.evaluate(axe.source);
     const ids = await page.evaluate(async () => {
       const axe = (window as unknown as { axe: { run: (root: Document) => Promise<{ violations: Array<{ id: string; impact: string | null }> }> } }).axe;

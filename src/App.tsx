@@ -17,7 +17,7 @@ const PrivacyPage = lazy(async () => ({ default: (await import("./pages/LegalPag
 const TermsPage = lazy(async () => ({ default: (await import("./pages/LegalPage")).TermsPage }));
 
 export function App() {
-  return <Layout><Suspense fallback={<div className="page narrow" aria-busy="true">…</div>}><Routes>
+  return <Layout><Suspense fallback={<div className="page narrow route-loading" role="status" aria-busy="true" aria-label="Loading"><span /><span /><span /></div>}><Routes>
     <Route path="/" element={<HomePage />} />
     <Route path="/reading/:id" element={<ReadingPage />} />
     <Route path="/history" element={<HistoryPage />} />
