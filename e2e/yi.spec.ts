@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import axe from "axe-core";
+import { deriveReadingFacts } from "../shared/casting";
 
 async function useLocale(page: Page, locale: "zh-HK" | "zh-CN" | "en") {
   await page.addInitScript((value) => localStorage.setItem("yi-locale", value), locale);
@@ -162,6 +163,52 @@ test("opens the chat socket after an authenticated session loads", async ({ page
 
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
   expect(chatSockets).toBeGreaterThan(0);
+});
+
+test("reuses reading-facts consent when discussing a reflected reading", async ({ page }) => {
+  await useLocale(page, "en");
+  await page.route("**/api/auth/get-session", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      user: { id: "reader-1", name: "Reader", email: "reader@example.test", emailVerified: true },
+      session: { id: "session-1" },
+    }),
+  }));
+  await page.route("**/api/v1/account/claim-guest", (route) => route.fulfill({ status: 204 }));
+  const readingId = "8933228a-76d5-49dc-824e-595d2c92bef3";
+  const facts = deriveReadingFacts({
+    schemaVersion: "reading-create@1",
+    clientRequestId: "c40d968d-91e8-4f9b-b50f-6e194f2b1341",
+    castingMethod: "three-number@1",
+    inputs: { upperTrigram: 1, lowerTrigram: 8, changingPosition: 1 },
+    question: { kind: "question", text: "What is one reversible next step?" },
+    timezone: "Asia/Hong_Kong",
+  });
+  await page.route(`**/api/v1/readings/${readingId}`, (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      id: readingId,
+      status: "ready",
+      contributionAmountHkd: 0,
+      createdAt: "2026-08-08T00:00:00.000Z",
+      facts,
+      reflection: {
+        summary: "A reflected summary",
+        perspective: "A reflected perspective",
+        questionsToConsider: [],
+        cautions: [],
+      },
+      reflectionShareEligible: true,
+      safety: { routed: false, limitations: [] },
+    }),
+  }));
+
+  await page.goto(`/reading/${readingId}`);
+  await page.getByRole("button", { name: "Discuss this reading" }).click();
+
+  await expect(page.getByRole("checkbox", { name: "I consent to sending this reading’s facts to DeepSeek" })).toBeChecked();
 });
 
 test("supports keyboard entry and reduced motion", async ({ page }) => {

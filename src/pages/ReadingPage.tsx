@@ -83,6 +83,10 @@ export function ReadingPage() {
     catch (reason) { setError(reason instanceof Error ? reason.message : t("common.error")); }
     finally { setBusy(false); }
   };
+  const openChat = () => {
+    setChatAgreed(Boolean(reading?.reflection));
+    setChatOpen(true);
+  };
   const startChat = async () => {
     if (!id || !chatAgreed) return;
     if (!session) { navigate("/auth", { state: { returnTo: `/reading/${id}` } }); return; }
@@ -132,7 +136,7 @@ export function ReadingPage() {
     {error && <p className="form-error" role="alert">{error}</p>}
     <section className="result-actions glass-panel">
       <div><h2>{session ? t("result.archive") : t("auth.needAccount")}</h2><p className="muted">{t("hero.privacy")}</p></div>
-      <div className="button-row wrap"><button className="button secondary" disabled={busy || Boolean(archiveId)} onClick={() => void archive()}>{archiveId ? t("result.archived") : t("result.archive")}</button><button className="button primary" onClick={() => setChatOpen(true)}>{t("result.chat")}</button></div>
+      <div className="button-row wrap"><button className="button secondary" disabled={busy || Boolean(archiveId)} onClick={() => void archive()}>{archiveId ? t("result.archived") : t("result.archive")}</button><button className="button primary" onClick={openChat}>{t("result.chat")}</button></div>
     </section>
     {chatOpen && <section className="consent-card glass-panel"><h3>{t("consent.title")}</h3><p>{t("chat.intro")}</p><label className="check-row important"><input type="checkbox" checked={chatAgreed} onChange={(event) => setChatAgreed(event.target.checked)} /><span>{t("consent.facts")}</span></label><label className="check-row"><input type="checkbox" checked={chatQuestion} onChange={(event) => setChatQuestion(event.target.checked)} /><span>{t("consent.question")}</span></label><label className="check-row"><input type="checkbox" checked={chatSources} onChange={(event) => setChatSources(event.target.checked)} /><span>{t("consent.sources")}</span></label><div className="button-row"><button className="button quiet" onClick={() => setChatOpen(false)}>{t("common.cancel")}</button><button className="button primary" disabled={!chatAgreed || busy} onClick={() => void startChat()}>{t("result.chat")}</button></div></section>}
     {archiveId && <ShareActions archiveId={archiveId} facts={facts} hasReflection={Boolean(reading.reflection) && reading.reflectionShareEligible === true} />}
