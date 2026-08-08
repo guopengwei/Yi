@@ -101,6 +101,47 @@ test("marks public share documents as non-indexable", async ({ page }) => {
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex,nofollow,noarchive");
 });
 
+test("redirects signed-out chat visitors before opening a socket", async ({ page }) => {
+  await useLocale(page, "en");
+  await page.route("**/api/auth/get-session", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: "null",
+  }));
+  const socketUrls: string[] = [];
+  page.on("websocket", (socket) => {
+    if (socket.url().includes("/api/v1/chats/")) socketUrls.push(socket.url());
+  });
+
+  await page.goto("/chat/8933228a-76d5-49dc-824e-595d2c92bef3");
+
+  await expect(page).toHaveURL(/\/auth$/);
+  expect(socketUrls).toEqual([]);
+});
+
+test("opens the chat socket after an authenticated session loads", async ({ page }) => {
+  await useLocale(page, "en");
+  await page.route("**/api/auth/get-session", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      user: { id: "reader-1", name: "Reader", email: "reader@example.test", emailVerified: true },
+      session: { id: "session-1" },
+    }),
+  }));
+  await page.route("**/api/v1/account/claim-guest", (route) => route.fulfill({ status: 204 }));
+  let chatSockets = 0;
+  await page.routeWebSocket("**/api/v1/chats/**", (socket) => {
+    chatSockets += 1;
+    socket.send(JSON.stringify({ type: "resume", messages: [] }));
+  });
+
+  await page.goto("/chat/8933228a-76d5-49dc-824e-595d2c92bef3");
+
+  await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
+  expect(chatSockets).toBeGreaterThan(0);
+});
+
 test("supports keyboard entry and reduced motion", async ({ page }) => {
   await useLocale(page, "en");
   await page.emulateMedia({ reducedMotion: "reduce" });

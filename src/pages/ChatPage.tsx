@@ -3,17 +3,20 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { useSession } from "../lib/session";
 
 interface Message { seq: number; id: string; role: "user" | "assistant"; content: string; createdAt: string }
 
 export function ChatPage() {
   const { id } = useParams(); const { t } = useTranslation();
   const navigate = useNavigate();
+  const { session, loading } = useSession();
+  const authenticated = Boolean(session);
   const [messages, setMessages] = useState<Message[]>([]); const [draft, setDraft] = useState(""); const [status, setStatus] = useState("connecting"); const [stream, setStream] = useState<{ seq: number; content: string } | null>(null);
   const socket = useRef<WebSocket | null>(null); const retry = useRef<number | null>(null); const lastSeq = useRef(0);
   const active = useRef(true);
   const connect = useCallback(() => {
-    if (!id) return;
+    if (!id || !authenticated) return;
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(`${protocol}//${location.host}/api/v1/chats/${id}/socket?after=${lastSeq.current}`);
     socket.current = ws; setStatus("connecting");
@@ -30,8 +33,21 @@ export function ChatPage() {
       if (data.type === "stream-end") setStream(null);
     };
     ws.onclose = () => { if (active.current) { setStatus("connecting"); retry.current = window.setTimeout(connect, 1500); } };
-  }, [id]);
-  useEffect(() => { active.current = true; connect(); return () => { active.current = false; if (retry.current) clearTimeout(retry.current); socket.current?.close(); }; }, [connect]);
+  }, [authenticated, id]);
+  useEffect(() => {
+    if (loading) return;
+    if (!authenticated) {
+      navigate("/auth", { replace: true, state: { returnTo: id ? `/chat/${id}` : "/history" } });
+      return;
+    }
+    active.current = true;
+    connect();
+    return () => {
+      active.current = false;
+      if (retry.current) clearTimeout(retry.current);
+      socket.current?.close();
+    };
+  }, [authenticated, connect, id, loading, navigate]);
   const send = () => { if (!draft.trim() || socket.current?.readyState !== WebSocket.OPEN) return; socket.current.send(JSON.stringify({ type: "message", id: crypto.randomUUID(), content: draft.trim() })); setDraft(""); };
   const remove = async () => {
     if (!id || !confirm(t("chat.deleteConfirm"))) return;
