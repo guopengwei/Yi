@@ -157,7 +157,7 @@ p { line-height: 1.72; }
 .line-facts li { padding:.6rem .7rem;border-bottom:1px solid var(--line);font-size:.78rem; }
 .line-facts li span { display:inline-grid;place-items:center;width:1.55rem;height:1.55rem;border-radius:50%;background:var(--line);margin-right:.5rem; }
 .line-facts li b { float:right; }.line-facts li.moving{color:var(--accent-deep);}.line-facts li.moving span{background:var(--accent);color:white;}
-.hexagram { width:min(100%,260px);display:flex;flex-direction:column;gap:15px;padding:1rem; }
+.hexagram { width:min(100%,260px);display:flex;flex-direction:column-reverse;gap:15px;padding:1rem; }
 .hexagram.compact { width:130px;gap:8px; }
 .hex-line { height:17px;display:flex;gap:17%;justify-content:center; }
 .hex-line span { display:block;height:100%;background:var(--ink);border-radius:3px;flex:1; }
