@@ -70,8 +70,8 @@ export function HomePage() {
       </div>
       <div className="hero-visual">
         <picture>
-          <source srcSet="/assets/yi-hero-mineral-v2.webp" type="image/webp" />
-          <img src="/assets/yi-hero-mineral-v2.jpg" alt={t("hero.imageAlt")} width="1536" height="1024" fetchPriority="high" />
+          <source srcSet="/assets/yi-hero-king-wen-v3.webp" type="image/webp" />
+          <img src="/assets/yi-hero-king-wen-v3.jpg" alt={t("hero.imageAlt")} width="1536" height="1024" fetchPriority="high" />
         </picture>
       </div>
     </section>
