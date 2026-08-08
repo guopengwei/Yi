@@ -1,5 +1,7 @@
 import { lazy, Suspense } from "react";
+import { useTranslation } from "react-i18next";
 import { Route, Routes } from "react-router-dom";
+import { PageState } from "./components/FlowPrimitives";
 import { Layout } from "./components/Layout";
 
 const HomePage = lazy(async () => ({ default: (await import("./pages/HomePage")).HomePage }));
@@ -17,7 +19,7 @@ const PrivacyPage = lazy(async () => ({ default: (await import("./pages/LegalPag
 const TermsPage = lazy(async () => ({ default: (await import("./pages/LegalPage")).TermsPage }));
 
 export function App() {
-  return <Layout><Suspense fallback={<div className="page narrow route-loading" role="status" aria-busy="true" aria-label="Loading"><span /><span /><span /></div>}><Routes>
+  return <Layout><Suspense fallback={<RouteFallback />}><Routes>
     <Route path="/" element={<HomePage />} />
     <Route path="/reading/:id" element={<ReadingPage />} />
     <Route path="/history" element={<HistoryPage />} />
@@ -33,4 +35,9 @@ export function App() {
     <Route path="/terms" element={<TermsPage />} />
     <Route path="*" element={<HomePage />} />
   </Routes></Suspense></Layout>;
+}
+
+function RouteFallback() {
+  const { t } = useTranslation();
+  return <div className="page narrow"><PageState kind="loading" title={t("common.loadingTitle")} body={t("common.loading")} /></div>;
 }

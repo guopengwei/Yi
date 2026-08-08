@@ -61,7 +61,7 @@ export function ContributionPanel({ readingId, cancelled = false }: { readingId:
     </label>}
     {paymentsEnabled && actualAmount > 0 && <Turnstile action="payment_create" onToken={onToken} resetKey={`${actualAmount}:${turnstileReset}`} />}
     {error && <p className="form-error" role="alert">{error}</p>}
-    <button className="button primary wide" disabled={!valid || busy || (actualAmount > 0 && !token)} onClick={() => void submit()}>
+    <button className="button primary wide contribution-submit" disabled={!valid || busy || (actualAmount > 0 && !token)} onClick={() => void submit()}>
       {busy ? t("common.loading") : actualAmount > 0 ? t("contribution.checkout") : t("contribution.proceed")}
     </button>
   </section>;

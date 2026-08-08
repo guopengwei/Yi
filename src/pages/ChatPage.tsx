@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useParams } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { useMobileShell } from "../components/MobileShell";
 import { api } from "../lib/api";
 import { useSession } from "../lib/session";
 
@@ -12,9 +12,10 @@ export function ChatPage() {
   const navigate = useNavigate();
   const { session, loading } = useSession();
   const authenticated = Boolean(session);
-  const [messages, setMessages] = useState<Message[]>([]); const [draft, setDraft] = useState(""); const [status, setStatus] = useState("connecting"); const [stream, setStream] = useState<{ seq: number; content: string } | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]); const [draft, setDraft] = useState(""); const [status, setStatus] = useState<"connecting" | "open">("connecting"); const [stream, setStream] = useState<{ seq: number; content: string } | null>(null);
   const socket = useRef<WebSocket | null>(null); const retry = useRef<number | null>(null); const lastSeq = useRef(0);
-  const active = useRef(true);
+  const active = useRef(true); const log = useRef<HTMLDivElement>(null); const composer = useRef<HTMLTextAreaElement>(null);
+  useMobileShell("focused");
   const connect = useCallback(() => {
     if (!id || !authenticated) return;
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
@@ -48,7 +49,13 @@ export function ChatPage() {
       socket.current?.close();
     };
   }, [authenticated, connect, id, loading, navigate]);
-  const send = () => { if (!draft.trim() || socket.current?.readyState !== WebSocket.OPEN) return; socket.current.send(JSON.stringify({ type: "message", id: crypto.randomUUID(), content: draft.trim() })); setDraft(""); };
+  useEffect(() => { log.current?.scrollTo({ top: log.current.scrollHeight, behavior: "smooth" }); }, [messages, stream?.content]);
+  const send = () => {
+    if (!draft.trim() || socket.current?.readyState !== WebSocket.OPEN) return;
+    socket.current.send(JSON.stringify({ type: "message", id: crypto.randomUUID(), content: draft.trim() }));
+    setDraft("");
+    if (composer.current) composer.current.style.height = "auto";
+  };
   const remove = async () => {
     if (!id || !confirm(t("chat.deleteConfirm"))) return;
     active.current = false;
@@ -56,7 +63,15 @@ export function ChatPage() {
     await api(`/api/v1/chats/${id}`, { method: "DELETE" });
     navigate("/history");
   };
-  return <section className="chat-page page narrow"><header><Link to="/history">← {t("history.title")}</Link><p className="eyebrow">{t("chat.eyebrow")}</p><h1>{t("chat.title")}</h1><p>{t("chat.intro")}</p><button className="button danger" onClick={() => void remove()}>{t("chat.delete")}</button></header><div className="chat-log" aria-live="polite">{messages.map((message) => <div className={`chat-message ${message.role}`} key={message.seq}><span>{message.role === "assistant" ? "易" : t("chat.you")}</span><p>{message.content}</p></div>)}{stream && <div className="chat-message assistant streaming"><span>易</span><p>{stream.content}<i /></p></div>}</div><div className="chat-compose"><textarea value={draft} maxLength={4000} placeholder={t("chat.placeholder")} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); send(); } }} /><button className="button primary" disabled={status !== "open" || !draft.trim()} onClick={send}>{status === "open" ? t("chat.send") : t("chat.reconnecting")}</button></div></section>;
+  return <section className="chat-page page narrow">
+    <header className="chat-header"><Link className="icon-button chat-back" to="/history" aria-label={t("common.back")}>←</Link><div><p className="eyebrow">{t("chat.eyebrow")}</p><h1>{t("chat.title")}</h1><p className={`connection-status ${status}`} role="status" aria-label={t("chat.statusLabel")}><span aria-hidden="true" />{status === "open" ? t("chat.connected") : t("chat.reconnecting")}</p></div><button className="icon-button chat-delete" aria-label={t("chat.delete")} onClick={() => void remove()}>⋯</button></header>
+    <div className="chat-log" ref={log} role="log" aria-live="polite" aria-relevant="additions text">
+      {messages.length === 0 && !stream && <div className="chat-empty"><span aria-hidden="true">易</span><p>{t("chat.empty")}</p></div>}
+      {messages.map((message) => <article className={`chat-message ${message.role}`} key={message.seq}><span>{message.role === "assistant" ? "易" : t("chat.you")}</span><p>{message.content}</p></article>)}
+      {stream && <article className="chat-message assistant streaming"><span>易</span><p>{stream.content}<i /></p></article>}
+    </div>
+    <div className="chat-compose"><textarea ref={composer} rows={1} value={draft} maxLength={4000} aria-label={t("chat.placeholder")} placeholder={t("chat.placeholder")} onChange={(event) => { setDraft(event.target.value); event.currentTarget.style.height = "auto"; event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 160)}px`; }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); send(); } }} /><button className="button primary" aria-label={t("chat.send")} disabled={status !== "open" || !draft.trim()} onClick={send}><span>{t("chat.send")}</span><b aria-hidden="true">↑</b></button></div>
+  </section>;
 }
 
 function mergeMessages(current: Message[], incoming: Message[]) {

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 import type { CastFacts } from "../../shared/casting";
+import { PageState } from "../components/FlowPrimitives";
 import { Hexagram, lineValuesForPattern } from "../components/Hexagram";
 import { ReflectionArticle, type ReflectionArticleData } from "../components/ReflectionArticle";
 import { api } from "../lib/api";
@@ -28,8 +29,8 @@ export function PublicSharePage() {
   useEffect(() => {
     if (token) void api<Snapshot>(`/api/v1/shares/public/${encodeURIComponent(token)}`).then(setSnapshot).catch(() => setMissing(true));
   }, [token]);
-  if (missing) return <section className="page narrow empty-state"><span>☷</span><h1>{t("share.expired")}</h1><Link className="button primary" to="/">{t("hero.start")}</Link></section>;
-  if (!snapshot) return <section className="page narrow"><p>{t("common.loading")}</p></section>;
+  if (missing) return <section className="page narrow"><PageState kind="empty" title={t("share.expired")} action={{ label: t("hero.start"), to: "/" }} /></section>;
+  if (!snapshot) return <section className="page narrow"><PageState kind="loading" title={t("common.loadingTitle")} body={t("common.loading")} /></section>;
   const { facts } = snapshot;
   const primaryName = hexagramName(facts.primary, i18n.language);
   const relatingName = hexagramName(facts.relating, i18n.language);

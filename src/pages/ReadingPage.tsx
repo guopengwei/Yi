@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { CastFacts } from "../../shared/casting";
+import { PageState } from "../components/FlowPrimitives";
 import { ContributionPanel } from "../components/ContributionPanel";
 import { Hexagram, lineValuesForPattern } from "../components/Hexagram";
 import { ReflectionArticle, type ReflectionArticleData } from "../components/ReflectionArticle";
@@ -103,11 +104,11 @@ export function ReadingPage() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : t("common.error")); setBusy(false); }
   };
 
-  if (error && !reading) return <section className="page narrow"><div className="notice error" role="alert">{error}</div><Link className="button secondary" to="/">{t("common.back")}</Link></section>;
-  if (!reading) return <section className="page narrow"><p>{t("common.loading")}</p></section>;
+  if (error && !reading) return <section className="page narrow"><PageState kind="error" title={t("common.error")} body={error} action={{ label: t("common.retry"), onClick: () => void load() }} /></section>;
+  if (!reading) return <section className="page narrow"><PageState kind="loading" title={t("common.loadingTitle")} body={t("common.loading")} /></section>;
   const cancelled = searchParams.get("checkout") === "cancelled";
   if (reading.status === "awaiting_contribution" || cancelled) return <section className="page narrow"><ContributionPanel readingId={reading.id} cancelled={cancelled} /></section>;
-  if (reading.status !== "ready" || !reading.facts) return <section className="page narrow payment-wait"><div className="waiting-orbit"><span /><span /></div><p className="eyebrow">Stripe / webhook</p><h1>{t("result.waiting")}</h1><p>{t("result.waitingBody")}</p><p className="status-pill">{t("contribution.pending")}</p></section>;
+  if (reading.status !== "ready" || !reading.facts) return <section className="page narrow payment-wait" aria-live="polite" aria-busy="true"><div className="waiting-orbit"><span /><span /></div><p className="eyebrow">Stripe / webhook</p><h1>{t("result.waiting")}</h1><p>{t("result.waitingBody")}</p><p className="status-pill">{t("contribution.pending")}</p></section>;
   const facts = reading.facts;
   const primaryName = hexagramName(facts.primary, i18n.language);
   const relatingName = hexagramName(facts.relating, i18n.language);
@@ -117,7 +118,7 @@ export function ReadingPage() {
       <Link className="button quiet" to="/">↻ {t("result.again")}</Link>
     </header>
     {reading.safety?.routed && <aside className="safety-card" aria-label="Safety guidance">{reading.safety.limitations.map((item) => <p key={item}>{item}</p>)}</aside>}
-    <section className="hexagram-pair glass-panel">
+    <section className="hexagram-pair glass-panel facts-summary" aria-label={t("result.facts")}>
       <div className="hex-card"><p>{t("result.primary")}</p><span className="hex-symbol">{facts.primary.unicodeSymbol}</span><Hexagram lineValues={lineValuesForPattern(facts.primary.pattern)} label={primaryName} /><h2>{primaryName}</h2><small>{t("result.kingWenOrder")} · {facts.primary.kingWenNumber}</small></div>
       <div className="change-arrow" aria-hidden>↗</div>
       <div className="hex-card"><p>{t("result.relating")}</p><span className="hex-symbol">{facts.relating.unicodeSymbol}</span><Hexagram lineValues={lineValuesForPattern(facts.relating.pattern)} label={relatingName} /><h2>{relatingName}</h2><small>{t("result.kingWenOrder")} · {facts.relating.kingWenNumber}</small></div>
@@ -134,7 +135,7 @@ export function ReadingPage() {
       </div>
     </section>
     {error && <p className="form-error" role="alert">{error}</p>}
-    <section className="result-actions glass-panel">
+    <section className="result-actions task-actions glass-panel">
       <div><h2>{session ? t("result.archive") : t("auth.needAccount")}</h2><p className="muted">{t("hero.privacy")}</p></div>
       <div className="button-row wrap"><button className="button secondary" disabled={busy || Boolean(archiveId)} onClick={() => void archive()}>{archiveId ? t("result.archived") : t("result.archive")}</button><button className="button primary" onClick={openChat}>{t("result.chat")}</button></div>
     </section>
