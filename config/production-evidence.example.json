@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "yi-production-evidence@1",
+  "legal": {
+    "companyName": "",
+    "supportEmail": "",
+    "privacyPolicyUrl": "",
+    "termsUrl": ""
+  },
+  "acceptance": {
+    "stripeSandboxWebhookTestedAt": null,
+    "stripeLiveWebhookTestedAt": null,
+    "emailDeliveryTestedAt": null,
+    "emailPasswordTestedAt": null,
+    "googleOAuthTestedAt": null,
+    "microsoftOAuthTestedAt": null,
+    "httpsDomainVerifiedAt": null,
+    "turnstileHostnameVerifiedAt": null
+  }
+}

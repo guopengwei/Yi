@@ -1,0 +1,147 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "yi-web",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-08-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/agents/*"]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": { "enabled": true, "invocation_logs": true }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "yi-db-local",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "CHAT", "class_name": "ReadingChat" },
+      { "name": "BUDGET", "class_name": "BudgetCoordinator" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ReadingChat", "BudgetCoordinator"] }
+  ],
+  "triggers": { "crons": ["0 3 * * *"] },
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["hello@yi.rich-tide.com", "support@yi.rich-tide.com"]
+    }
+  ],
+  "secrets": {
+    "required": ["DEEPSEEK_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "BETTER_AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "TURNSTILE_SECRET", "SHARE_SIGNING_KEY", "ADMIN_EMAILS"]
+  },
+  "vars": {
+    "APP_ENV": "development",
+    "APP_ORIGIN": "http://localhost:5173",
+    "ALLOWED_TURNSTILE_HOSTNAMES": "localhost,127.0.0.1",
+    "EMAIL_FROM": "hello@yi.rich-tide.com",
+    "SUPPORT_EMAIL": "support@yi.rich-tide.com",
+    "CATALOG_REVIEWED": "false",
+    "AI_ENABLED": "false",
+    "GLOBAL_DAILY_TOKEN_BUDGET": "250000",
+    "GLOBAL_DAILY_SPEND_MICROS": "10000000",
+    "AI_MAX_CONCURRENCY": "8",
+    "GUEST_DAILY_REFLECTIONS": "1",
+    "USER_DAILY_REFLECTIONS": "5",
+    "USER_DAILY_CHAT_TURNS": "50"
+  },
+  "env": {
+    "preview": {
+      "name": "yi-web-preview",
+      "vars": {
+        "APP_ENV": "preview",
+        "APP_ORIGIN": "https://preview.yi.rich-tide.com",
+        "ALLOWED_TURNSTILE_HOSTNAMES": "preview.yi.rich-tide.com",
+        "EMAIL_FROM": "hello@yi.rich-tide.com",
+        "SUPPORT_EMAIL": "support@yi.rich-tide.com",
+        "CATALOG_REVIEWED": "true",
+        "AI_ENABLED": "true",
+        "GLOBAL_DAILY_TOKEN_BUDGET": "250000",
+        "GLOBAL_DAILY_SPEND_MICROS": "10000000",
+        "AI_MAX_CONCURRENCY": "8",
+        "GUEST_DAILY_REFLECTIONS": "1",
+        "USER_DAILY_REFLECTIONS": "5",
+        "USER_DAILY_CHAT_TURNS": "50"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "yi-db-preview",
+          "database_id": "5ce81a34-aac0-408c-adac-88537004b4b1",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          { "name": "CHAT", "class_name": "ReadingChat" },
+          { "name": "BUDGET", "class_name": "BudgetCoordinator" }
+        ]
+      },
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": ["hello@yi.rich-tide.com", "support@yi.rich-tide.com"]
+        }
+      ],
+      "secrets": {
+        "required": ["DEEPSEEK_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "BETTER_AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "TURNSTILE_SECRET", "SHARE_SIGNING_KEY", "ADMIN_EMAILS"]
+      },
+      "triggers": { "crons": ["0 3 * * *"] },
+      "routes": [{ "pattern": "preview.yi.rich-tide.com", "custom_domain": true }]
+    },
+    "production": {
+      "name": "yi-web",
+      "vars": {
+        "APP_ENV": "production",
+        "APP_ORIGIN": "https://yi.rich-tide.com",
+        "ALLOWED_TURNSTILE_HOSTNAMES": "yi.rich-tide.com",
+        "EMAIL_FROM": "hello@yi.rich-tide.com",
+        "SUPPORT_EMAIL": "support@yi.rich-tide.com",
+        "CATALOG_REVIEWED": "true",
+        "AI_ENABLED": "true",
+        "GLOBAL_DAILY_TOKEN_BUDGET": "250000",
+        "GLOBAL_DAILY_SPEND_MICROS": "10000000",
+        "AI_MAX_CONCURRENCY": "8",
+        "GUEST_DAILY_REFLECTIONS": "1",
+        "USER_DAILY_REFLECTIONS": "5",
+        "USER_DAILY_CHAT_TURNS": "50"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "yi-db",
+          "database_id": "8ef9ccb2-bc0f-4b59-a565-f8a4563855bc",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          { "name": "CHAT", "class_name": "ReadingChat" },
+          { "name": "BUDGET", "class_name": "BudgetCoordinator" }
+        ]
+      },
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": ["hello@yi.rich-tide.com", "support@yi.rich-tide.com"]
+        }
+      ],
+      "secrets": {
+        "required": ["DEEPSEEK_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "BETTER_AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "TURNSTILE_SECRET", "SHARE_SIGNING_KEY", "ADMIN_EMAILS"]
+      },
+      "triggers": { "crons": ["0 3 * * *"] },
+      "routes": [{ "pattern": "yi.rich-tide.com", "custom_domain": true }]
+    }
+  }
+}
