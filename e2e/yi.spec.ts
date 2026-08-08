@@ -32,6 +32,12 @@ test("completes a reviewed three-number cast with HK$0", async ({ page }) => {
   await page.getByRole("button", { name: "Choose a casting method" }).click();
   await page.getByLabel("Upper trigram (1-8)").fill("1");
   await page.getByLabel("Lower trigram (1-8)").fill("8");
+  await expect(page.getByText("Qian · Heaven")).toBeVisible();
+  await expect(page.getByText("Kun · Earth")).toBeVisible();
+  await page.getByLabel("Upper trigram (1-8)").fill("3");
+  await expect(page.getByText("Li · Fire")).toBeVisible();
+  await expect(page.getByText("Qian · Heaven")).toHaveCount(0);
+  await page.getByLabel("Upper trigram (1-8)").fill("1");
   await page.getByLabel("Changing line (1-6)").fill("1");
   await page.getByRole("button", { name: "Review the lines" }).click();
   await expect(page.getByText("Lines are shown bottom to top.")).toBeVisible();
@@ -41,6 +47,22 @@ test("completes a reviewed three-number cast with HK$0", async ({ page }) => {
   await expect(page).toHaveURL(/\/reading\/[0-9a-f-]+$/);
   await expect(page.getByText(/Reproducible facts/).first()).toBeVisible();
   await expect(page.getByText("Source catalog under review", { exact: true })).toBeVisible();
+});
+
+test("expands explanations for all three casting methods", async ({ page }) => {
+  await useLocale(page, "en");
+  await page.goto("/");
+  await page.getByLabel("Your question").fill("How should I understand the methods?");
+  await page.getByRole("button", { name: "Choose a casting method" }).click();
+
+  await page.getByText("How does this method work?").click();
+  await expect(page.getByText("This method always has exactly one changing line.")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Three coins" }).click();
+  await expect(page.getByText("A total of 6 is changing yin")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Secure random" }).click();
+  await expect(page.getByText("White lines are stable; orange lines are changing.")).toBeVisible();
 });
 
 test("has no serious accessibility violations on the primary landing view", async ({ page }) => {

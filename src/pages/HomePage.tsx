@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { TRIGRAMS } from "../../shared/catalog";
 import type { LineValue } from "../../shared/casting";
 import { createSecureRandomDraft, lineValuesFromReading } from "../../shared/casting";
 import { readingCreateSchema, type CastingMethod, type ReadingCreate } from "../../shared/contracts";
@@ -9,6 +10,8 @@ import { postJson } from "../lib/api";
 
 type Face = "heads" | "tails" | null;
 type Phase = "question" | "method" | "review" | "contribution";
+
+const trigramFromInput = (value: string) => TRIGRAMS.find((trigram) => trigram.number === Number(value));
 
 export function HomePage() {
   const { t } = useTranslation();
@@ -47,6 +50,8 @@ export function HomePage() {
     setPrepared(request); setError(""); setPhase("review");
   };
   const lineValues = useMemo(() => prepared ? lineValuesFromReading(prepared) : [], [prepared]);
+  const guideKey = method === "three-number@1" ? "number" : method === "three-coin@1" ? "coin" : "random";
+  const guidePoints = guideKey === "number" ? ["point1", "point2"] : ["point1", "point2", "point3"];
   const submitReading = async () => {
     if (!prepared) return;
     setBusy(true); setError("");
@@ -100,8 +105,27 @@ export function HomePage() {
         </div>
         <div className="glass-panel method-config">
           <p>{t(method === "three-number@1" ? "cast.numberBody" : method === "three-coin@1" ? "cast.coinBody" : "cast.randomBody")}</p>
+          <details className="method-explanation">
+            <summary><span>{t("methodGuide.title")}</span><span className="method-explanation-icon" aria-hidden="true">＋</span></summary>
+            <div>
+              <p>{t(`methodGuide.${guideKey}.body`)}</p>
+              <ul>{guidePoints.map((point) => <li key={point}>{t(`methodGuide.${guideKey}.${point}`)}</li>)}</ul>
+            </div>
+          </details>
           {method === "three-number@1" && <div className="number-fields">
-            {([["upper", "cast.upper", 8], ["lower", "cast.lower", 8], ["changing", "cast.changing", 6]] as const).map(([key, label, max]) => <label className="field" key={key}><span>{t(label)}</span><input inputMode="numeric" min="1" max={max} value={numbers[key]} onChange={(event) => setNumbers((current) => ({ ...current, [key]: event.target.value.replace(/\D/g, "").slice(0, 1) }))} /></label>)}
+            {([["upper", "cast.upper"], ["lower", "cast.lower"]] as const).map(([key, label]) => {
+              const trigram = trigramFromInput(numbers[key]);
+              return <div className="trigram-field" key={key}>
+                <label className="field">
+                  <span>{t(label)}</span>
+                  <input inputMode="numeric" min="1" max="8" value={numbers[key]} onChange={(event) => setNumbers((current) => ({ ...current, [key]: event.target.value.replace(/\D/g, "").slice(0, 1) }))} />
+                </label>
+                <output className="trigram-preview" aria-live="polite" aria-atomic="true">
+                  {trigram && <><span aria-hidden="true">{trigram.symbol}</span><strong>{t(`trigrams.${trigram.number}`)}</strong></>}
+                </output>
+              </div>;
+            })}
+            <label className="field"><span>{t("cast.changing")}</span><input inputMode="numeric" min="1" max="6" value={numbers.changing} onChange={(event) => setNumbers((current) => ({ ...current, changing: event.target.value.replace(/\D/g, "").slice(0, 1) }))} /></label>
           </div>}
           {method === "three-coin@1" && <div className="coin-grid">
             {throws.map((row, line) => <div className="coin-row" key={line}><span>{line === 0 ? t("cast.bottom") : line === 5 ? t("cast.top") : t("cast.line", { n: line + 1 })}</span><div>{row.map((face, coin) => <button type="button" className={`coin ${face ?? ""}`} key={coin} onClick={() => setCoin(line, coin, face === "heads" ? "tails" : "heads")}>{face === "tails" ? t("cast.tails") : t("cast.heads")}</button>)}</div></div>)}
