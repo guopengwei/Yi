@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { deriveReadingFacts } from "../shared/casting";
 import { readingCreateSchema } from "../shared/contracts";
-import { buildDeepSeekRequest, createReflection, estimateDeepSeekReservation, type SourceExcerpt } from "../worker/lib/deepseek";
+import { buildDeepSeekRequest, createReflection, estimateDeepSeekReservation, REFLECTION_MAX_OUTPUT_TOKENS, type SourceExcerpt, validateReflectionCandidate } from "../worker/lib/deepseek";
 import type { Env } from "../worker/env";
 
 const facts = deriveReadingFacts(readingCreateSchema.parse({
@@ -17,11 +17,11 @@ const source: SourceExcerpt = {
   id: "release-1:en:hexagram:kw-12",
   releaseId: "00000000-0000-4000-8000-000000000099",
   entryKey: `hexagram:${facts.primary.id}`,
-  text: "Reviewed source excerpt.",
+  text: "Approved Takashima interpretation guidance for this line.",
   locale: "en",
   approvalStatus: "approved",
   rightsStatus: "commissioned",
-  provenance: { title: "Commissioned Yi commentary", locator: "entry 12" },
+  provenance: { title: "高島易斷 — approved catalog", locator: "entry 12" },
 };
 
 function env(): Env {
@@ -43,11 +43,33 @@ describe("DeepSeek adapter", () => {
       model: "deepseek-v4-flash",
       reasoning_effort: "high",
       thinking: { type: "enabled" },
-      max_tokens: 1200,
+      max_tokens: REFLECTION_MAX_OUTPUT_TOKENS,
       response_format: { type: "json_object" },
     });
     expect(body).not.toHaveProperty("temperature");
-    expect(JSON.parse(body.messages[1]!.content).question).toEqual({ kind: "withheld" });
+    const context = JSON.parse(body.messages[1]!.content);
+    expect(context.question).toEqual({ kind: "withheld" });
+    expect(context.takashimaInterpretationGuidance).toMatchObject({
+      attribution: "高島吞象《高島易斷》 / Takashima Donsho, Takashima Ekidan",
+      role: "Primary approved interpretation guidance for this reflection",
+      excerpts: [{ id: source.id, entryKey: source.entryKey, text: source.text }],
+    });
+    expect(body.messages[0]!.content).toContain("primary interpretation guidance");
+    expect(body.messages[0]!.content).toContain("hexagram entries are compilations");
+    expect(body.messages[0]!.content).toContain("700-1,100 words");
+    expect(body.messages[0]!.content).toContain("6-9 clear paragraphs");
+  });
+
+  it("accepts the expanded detailed perspective size", () => {
+    expect(validateReflectionCandidate({
+      schemaVersion: "ai-reflection@1",
+      summary: "A concise synthesis.",
+      perspective: "Detailed reflection. ".repeat(300),
+      questionsToConsider: ["One?", "Two?", "Three?"],
+      cautions: [],
+      sourceRefs: [source.id],
+      grounding: { primaryPattern: facts.primary.pattern, relatingPattern: facts.relating.pattern, changingPositions: facts.cast.changingPositions },
+    })).toEqual({ success: true });
   });
 
   it("does not call the provider when consent policy or safety disables it", async () => {

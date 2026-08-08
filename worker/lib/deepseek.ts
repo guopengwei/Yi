@@ -6,13 +6,14 @@ import type { ReadingQuestion } from "../../shared/contracts";
 import type { Env } from "../env";
 
 export const DEEPSEEK_MODEL = "deepseek-v4-flash" as const;
-export const REFLECTION_PROMPT_VERSION = "yi-reflection@1" as const;
+export const REFLECTION_PROMPT_VERSION = "yi-reflection@2" as const;
+export const REFLECTION_MAX_OUTPUT_TOKENS = 8_000;
 export const CHAT_PROMPT_VERSION = "yi-chat@1" as const;
 
 const reflectionSchema = z.object({
   schemaVersion: z.literal("ai-reflection@1"),
-  summary: z.string().min(1).max(900),
-  perspective: z.string().min(1).max(1800),
+  summary: z.string().min(1).max(2_000),
+  perspective: z.string().min(1).max(12_000),
   questionsToConsider: z.array(z.string().min(1).max(300)).min(1).max(3),
   cautions: z.array(z.string().min(1).max(300)).max(3),
   sourceRefs: z.array(z.string().min(1).max(160)).max(24),
@@ -112,17 +113,23 @@ export function buildDeepSeekRequest(input: {
     model: DEEPSEEK_MODEL,
     reasoning_effort: "high",
     thinking: { type: "enabled" },
-    max_tokens: 1200,
+    max_tokens: REFLECTION_MAX_OUTPUT_TOKENS,
     response_format: { type: "json_object" },
     messages: [
       {
         role: "system",
         content: [
-          `You are Yi, a restrained reflection assistant. Reply only with JSON matching ${REFLECTION_PROMPT_VERSION}.`,
+          `You are Yi, a thoughtful cultural reflection assistant. Reply only with JSON matching ${REFLECTION_PROMPT_VERSION}.`,
           "Treat the reading as a cultural prompt for reflection, never a prediction or instruction.",
           "Use only the supplied deterministic facts and approved source excerpts. Never invent quotations or source identifiers.",
+          "The user payload's takashimaInterpretationGuidance is approved context from Takashima Donsho's Takashima Ekidan (高島吞象《高島易斷》). Use its excerpts as the primary interpretation guidance for the reflection and cite every excerpt used via its exact approved ID in sourceRefs.",
+          "Respect each excerpt's entryKey: hexagram entries are compilations of the six line texts, not independent Judgment or Image records; moving-line and special-line entries contain the corresponding complete commentary.",
+          "Produce a substantial, specific visible reflection rather than a brief overview. Keep summary to 2-4 sentences, then make perspective 700-1,100 words in English or comparably detailed in the requested Chinese locale.",
+          "Organize perspective into 6-9 clear paragraphs separated by blank lines. Examine the primary pattern, relating pattern, each supplied changing line (when any), tensions between them, at least two plausible interpretations, practical implications, uncertainties, and a grounded synthesis.",
+          "Connect every observation to supplied facts, approved source material, or explicitly label it as a reflective possibility. Do not pad, repeat the summary, or claim access to facts that were withheld.",
+          "Detailed visible analysis is required, but never reveal private chain-of-thought, hidden reasoning, or internal deliberation.",
           "sourceRefs MUST be a JSON array containing only approved source ID strings. Never place source objects, excerpts, provenance, or entry keys in sourceRefs.",
-          "Return 1-3 questionsToConsider items and 0-3 cautions items. Three is a hard maximum for each array.",
+          "Return exactly 3 distinct questionsToConsider items and 0-3 cautions items. Three is a hard maximum for each array.",
           "Do not expose hidden reasoning. Use the requested locale.",
           'Shape: {"schemaVersion":"ai-reflection@1","summary":"...","perspective":"...","questionsToConsider":["..."],"cautions":[],"sourceRefs":[],"grounding":{"primaryPattern":"000000","relatingPattern":"000000","changingPositions":[]}}',
         ].join("\n"),
@@ -133,7 +140,11 @@ export function buildDeepSeekRequest(input: {
           locale: input.locale,
           facts: safeFacts,
           question: input.includeQuestion ? input.question : { kind: "withheld" },
-          approvedSources: input.sources,
+          takashimaInterpretationGuidance: {
+            attribution: "高島吞象《高島易斷》 / Takashima Donsho, Takashima Ekidan",
+            role: "Primary approved interpretation guidance for this reflection",
+            excerpts: input.sources,
+          },
         }),
       },
     ],

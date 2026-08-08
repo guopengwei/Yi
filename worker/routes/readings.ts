@@ -8,7 +8,7 @@ import { optionalSession, requireSession } from "../lib/auth";
 import { isProviderEnabled } from "../lib/ai-config";
 import { reserveBudget } from "../lib/budget";
 import { canonicalFingerprint } from "../lib/crypto";
-import { createReflection, DEEPSEEK_MODEL, estimateDeepSeekReservation, parseSourceSnapshot, REFLECTION_PROMPT_VERSION } from "../lib/deepseek";
+import { createReflection, DEEPSEEK_MODEL, estimateDeepSeekReservation, parseSourceSnapshot, REFLECTION_MAX_OUTPUT_TOKENS, REFLECTION_PROMPT_VERSION } from "../lib/deepseek";
 import { ApiError } from "../lib/errors";
 import { assertTimezone, clientIp, parseJson, requestLocale } from "../lib/http";
 import { guestIdentity, type Identity } from "../lib/identity";
@@ -164,7 +164,10 @@ routes.post("/:id/reflection", async (c) => {
   const operationId = crypto.randomUUID();
   let budget: Awaited<ReturnType<typeof reserveBudget>> | null = null;
   if (providerEligible) {
-    const estimate = estimateDeepSeekReservation({ facts, question: consent.includeQuestion ? question : { kind: "withheld" }, sources }, 1_200);
+    const estimate = estimateDeepSeekReservation(
+      { facts, question: consent.includeQuestion ? question : { kind: "withheld" }, sources },
+      REFLECTION_MAX_OUTPUT_TOKENS,
+    );
     try {
       budget = await reserveBudget(c.env, {
         reservationId: operationId,

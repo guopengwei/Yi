@@ -3,12 +3,13 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 import type { CastFacts } from "../../shared/casting";
 import { Hexagram, lineValuesForPattern } from "../components/Hexagram";
+import { ReflectionArticle, type ReflectionArticleData } from "../components/ReflectionArticle";
 import { api } from "../lib/api";
 import { hexagramName } from "../lib/hexagram-name";
 
 interface Snapshot {
   facts: CastFacts;
-  reflection: { summary: string; perspective: string; questionsToConsider: string[] } | null;
+  reflection: ReflectionArticleData | null;
   expiresAt: string;
 }
 
@@ -38,7 +39,7 @@ export function PublicSharePage() {
       <div><Hexagram lineValues={lineValuesForPattern(facts.primary.pattern)} label={primaryName} /><h2>{primaryName}</h2></div><span>→</span>
       <div><Hexagram lineValues={lineValuesForPattern(facts.relating.pattern)} label={relatingName} /><h2>{relatingName}</h2></div>
     </div>
-    {snapshot.reflection && <section className="reflection-card glass-panel"><h2>{snapshot.reflection.summary}</h2><p>{snapshot.reflection.perspective}</p><ol>{snapshot.reflection.questionsToConsider.map((item) => <li key={item}>{item}</li>)}</ol></section>}
+    {snapshot.reflection && <section className="standalone-reflection"><ReflectionArticle reflection={snapshot.reflection} /></section>}
     <footer><p>{t("share.expires", { date: new Date(snapshot.expiresAt).toLocaleString(i18n.language) })}</p><Link className="button primary" to="/">{t("hero.start")}</Link></footer>
   </article>;
 }

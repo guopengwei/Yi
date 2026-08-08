@@ -4,13 +4,14 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import type { CastFacts } from "../../shared/casting";
 import { ContributionPanel } from "../components/ContributionPanel";
 import { Hexagram, lineValuesForPattern } from "../components/Hexagram";
+import { ReflectionArticle, type ReflectionArticleData } from "../components/ReflectionArticle";
 import { ShareActions } from "../components/ShareActions";
 import { Turnstile } from "../components/Turnstile";
 import { api, postJson } from "../lib/api";
 import { useSession } from "../lib/session";
 import { hexagramName } from "../lib/hexagram-name";
 
-interface Reflection { summary: string; perspective: string; questionsToConsider: string[]; cautions: string[] }
+interface Reflection extends ReflectionArticleData { questionsToConsider: string[]; cautions: string[] }
 interface ReadingResponse {
   id: string;
   status: "awaiting_contribution" | "payment_pending" | "ready" | "failed" | "expired";
@@ -122,10 +123,11 @@ export function ReadingPage() {
       <div className="glass-subpanel source-status"><p className="eyebrow">{t(facts.sourceStatus === "reviewed" ? "result.sourceReviewed" : "result.sourcePending")}</p><p>{t(facts.sourceStatus === "reviewed" ? "result.sourceReviewedBody" : "result.sourceBody")}</p></div>
     </section>
     <section className="reflection-section">
-      <div className="section-title"><p className="eyebrow">Optional / DeepSeek</p><h2>{t("result.reflection")}</h2></div>
-      {reading.reflection ? <div className="reflection-card glass-panel"><h3>{reading.reflection.summary}</h3><p>{reading.reflection.perspective}</p><ol>{reading.reflection.questionsToConsider.map((question) => <li key={question}>{question}</li>)}</ol>{reading.reflection.cautions.map((caution) => <p className="caution" key={caution}>{caution}</p>)}</div>
+      <header className="reflection-heading"><p className="eyebrow">Optional / DeepSeek</p><h2>{t("result.reflection")}</h2></header>
+      <div className="reflection-content">{reading.reflection ? <ReflectionArticle reflection={reading.reflection} />
         : !consentOpen ? <button className="button primary" onClick={() => setConsentOpen(true)}>{t("result.askReflection")}</button>
           : <div className="consent-card glass-panel"><h3>{t("consent.title")}</h3><p>{t("consent.body")}</p><label className="check-row important"><input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} /><span>{t("consent.facts")}</span></label><label className="check-row"><input type="checkbox" checked={includeQuestion} onChange={(event) => setIncludeQuestion(event.target.checked)} /><span>{t("consent.question")}</span></label><label className="check-row"><input type="checkbox" checked={includeSources} onChange={(event) => setIncludeSources(event.target.checked)} /><span>{t("consent.sources")}</span></label>{!session && <Turnstile action="guest_ai" onToken={setTurnstile} resetKey={turnstileReset} />}<div className="button-row"><button className="button quiet" onClick={() => setConsentOpen(false)}>{t("consent.decline")}</button><button className="button primary" disabled={!agreed || busy || (!session && !turnstile)} onClick={() => void reflection()}>{busy ? t("common.loading") : t("consent.submit")}</button></div></div>}
+      </div>
     </section>
     {error && <p className="form-error" role="alert">{error}</p>}
     <section className="result-actions glass-panel">
