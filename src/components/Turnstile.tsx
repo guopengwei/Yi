@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 declare global {
   interface Window {
@@ -26,10 +27,12 @@ function loadTurnstile() {
   return scriptPromise;
 }
 
-export function Turnstile({ action, onToken, resetKey = 0 }: { action: string; onToken: (token: string) => void; resetKey?: number }) {
+export function Turnstile({ action, onToken, resetKey = 0 }: { action: string; onToken: (token: string) => void; resetKey?: number | string }) {
+  const { t } = useTranslation();
   const id = useId().replace(/:/g, "");
   const container = useRef<HTMLDivElement>(null);
   const widget = useRef<string | null>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     let active = true;
     void loadTurnstile().then(() => {
@@ -39,18 +42,27 @@ export function Turnstile({ action, onToken, resetKey = 0 }: { action: string; o
         action,
         theme: "auto",
         size: "flexible",
-        callback: onToken,
-        "expired-callback": () => onToken(""),
-        "error-callback": () => onToken(""),
+        callback: (token: string) => { setFailed(false); onToken(token); },
+        "expired-callback": () => { setFailed(false); onToken(""); },
+        "timeout-callback": () => { setFailed(true); onToken(""); },
+        "unsupported-callback": () => { setFailed(true); onToken(""); return true; },
+        "error-callback": () => { setFailed(true); onToken(""); return false; },
       });
-    });
+    }).catch(() => { if (active) { setFailed(true); onToken(""); } });
     return () => {
       active = false;
       if (widget.current && window.turnstile) window.turnstile.remove(widget.current);
     };
   }, [action, id, onToken]);
   useEffect(() => {
-    if (widget.current && window.turnstile) window.turnstile.reset(widget.current);
+    if (widget.current && window.turnstile) {
+      setFailed(false);
+      onToken("");
+      window.turnstile.reset(widget.current);
+    }
   }, [resetKey]);
-  return <div id={id} className="turnstile" ref={container} aria-label="Bot verification" />;
+  return <>
+    <div id={id} className="turnstile" ref={container} aria-label={t("turnstile.label")} />
+    {failed && <p className="form-error" role="alert">{t("turnstile.error")}</p>}
+  </>;
 }

@@ -14,6 +14,16 @@ async function userLocale(env: Env, userId: string): Promise<Locale> {
   return row?.locale ?? "zh-HK";
 }
 
+async function requestedUserLocale(env: Env, userId: string, request?: Request): Promise<Locale> {
+  const requested = request?.headers.get("X-Yi-Locale");
+  if (requested === "zh-HK" || requested === "zh-CN" || requested === "en") {
+    await env.DB.prepare("UPDATE profiles SET locale = ?, updated_at = ? WHERE user_id = ?")
+      .bind(requested, Date.now(), userId).run();
+    return requested;
+  }
+  return userLocale(env, userId);
+}
+
 export function createAuth(env: Env, executionCtx?: { waitUntil(promise: Promise<unknown>): void }) {
   if (!env.BETTER_AUTH_SECRET) throw new ApiError("AUTH_NOT_CONFIGURED", 503, "Authentication is not configured.");
   const socialProviders: Record<string, { clientId: string; clientSecret: string; scope?: string[] }> = {};
@@ -47,8 +57,8 @@ export function createAuth(env: Env, executionCtx?: { waitUntil(promise: Promise
       minPasswordLength: 10,
       maxPasswordLength: 128,
       revokeSessionsOnPasswordReset: true,
-      sendResetPassword: async ({ user, url }) => {
-        send(sendTransactionalEmail(env, { to: user.email, kind: "reset", locale: await userLocale(env, user.id), url }));
+      sendResetPassword: async ({ user, url }, request) => {
+        send(sendTransactionalEmail(env, { to: user.email, kind: "reset", locale: await requestedUserLocale(env, user.id, request), url }));
       },
     },
     emailVerification: {
@@ -56,11 +66,11 @@ export function createAuth(env: Env, executionCtx?: { waitUntil(promise: Promise
       sendOnSignIn: true,
       autoSignInAfterVerification: false,
       expiresIn: 60 * 60,
-      sendVerificationEmail: async ({ user, url }) => {
-        send(sendTransactionalEmail(env, { to: user.email, kind: "verify", locale: await userLocale(env, user.id), url }));
+      sendVerificationEmail: async ({ user, url }, request) => {
+        send(sendTransactionalEmail(env, { to: user.email, kind: "verify", locale: await requestedUserLocale(env, user.id, request), url }));
       },
-      afterEmailVerification: async (user) => {
-        send(sendTransactionalEmail(env, { to: user.email, kind: "welcome", locale: await userLocale(env, user.id) }));
+      afterEmailVerification: async (user, request) => {
+        send(sendTransactionalEmail(env, { to: user.email, kind: "welcome", locale: await requestedUserLocale(env, user.id, request) }));
       },
     },
     socialProviders,
@@ -76,8 +86,8 @@ export function createAuth(env: Env, executionCtx?: { waitUntil(promise: Promise
     user: {
       deleteUser: {
         enabled: true,
-        sendDeleteAccountVerification: async ({ user, url }) => {
-          send(sendTransactionalEmail(env, { to: user.email, kind: "delete", locale: await userLocale(env, user.id), url }));
+        sendDeleteAccountVerification: async ({ user, url }, request) => {
+          send(sendTransactionalEmail(env, { to: user.email, kind: "delete", locale: await requestedUserLocale(env, user.id, request), url }));
         },
       },
     },

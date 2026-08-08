@@ -51,9 +51,12 @@ function copy(kind: TemplateKind, locale: Locale, url?: string) {
 export async function sendTransactionalEmail(env: Env, input: { to: string; kind: TemplateKind; locale?: Locale; url?: string }) {
   const locale = input.locale ?? "zh-HK";
   const body = copy(input.kind, locale, input.url);
+  const fromEmail = input.kind === "welcome" || input.kind === "contact-received"
+    ? env.HELLO_EMAIL
+    : env.EMAIL_FROM;
   return env.EMAIL.send({
     to: input.to,
-    from: { email: env.EMAIL_FROM, name: "Yi · 易" },
+    from: { email: fromEmail, name: "Yi · 易" },
     replyTo: env.SUPPORT_EMAIL,
     subject: subjects[locale][input.kind],
     text: body.text,

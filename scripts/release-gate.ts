@@ -16,12 +16,12 @@ const evidenceSchema = z.object({
     termsUrl: z.url().startsWith("https://"),
   }).strict(),
   acceptance: z.object({
-    stripeSandboxWebhookTestedAt: z.iso.datetime(),
-    stripeLiveWebhookTestedAt: z.iso.datetime(),
+    stripeSandboxWebhookTestedAt: z.iso.datetime().nullable(),
+    stripeLiveWebhookTestedAt: z.iso.datetime().nullable(),
     emailDeliveryTestedAt: z.iso.datetime(),
     emailPasswordTestedAt: z.iso.datetime(),
-    googleOAuthTestedAt: z.iso.datetime(),
-    microsoftOAuthTestedAt: z.iso.datetime(),
+    googleOAuthTestedAt: z.iso.datetime().nullable(),
+    microsoftOAuthTestedAt: z.iso.datetime().nullable(),
     httpsDomainVerifiedAt: z.iso.datetime(),
     turnstileHostnameVerifiedAt: z.iso.datetime(),
   }).strict(),
@@ -40,7 +40,7 @@ async function main() {
   let evidenceRaw: string;
   try { evidenceRaw = await readFile(resolve(root, "config/production-evidence.json"), "utf8"); }
   catch { throw new Error("Production blocked: config/production-evidence.json is missing. Start from the example and attach completed legal/acceptance evidence."); }
-  evidenceSchema.parse(JSON.parse(evidenceRaw));
+  const evidence = evidenceSchema.parse(JSON.parse(evidenceRaw));
 
   const config = JSON.parse(await readFile(resolve(root, "wrangler.jsonc"), "utf8")) as Record<string, any>;
   if (config.compatibility_date !== "2026-08-08" || !config.compatibility_flags?.includes("nodejs_compat")) {
@@ -56,6 +56,24 @@ async function main() {
   }
   if (!production?.routes?.some((route: { pattern?: string; custom_domain?: boolean }) => route.pattern === "yi.rich-tide.com" && route.custom_domain === true)) {
     throw new Error("Production blocked: yi.rich-tide.com is not configured as the Worker custom domain.");
+  }
+  const expectedEmailVars = {
+    EMAIL_FROM: "no-reply@rich-tide.com",
+    HELLO_EMAIL: "hello@rich-tide.com",
+    SUPPORT_EMAIL: "contact@rich-tide.com",
+  };
+  for (const [key, expected] of Object.entries(expectedEmailVars)) {
+    if (production?.vars?.[key] !== expected) throw new Error(`Production blocked: ${key} must be ${expected}.`);
+  }
+  const allowedSenders = new Set<string>(production?.send_email?.[0]?.allowed_sender_addresses ?? []);
+  for (const sender of Object.values(expectedEmailVars)) {
+    if (!allowedSenders.has(sender)) throw new Error(`Production blocked: the EMAIL binding does not allow ${sender}.`);
+  }
+  if (evidence.legal.companyName !== "RICHTIDE LIMITED" ||
+      evidence.legal.supportEmail !== "contact@rich-tide.com" ||
+      evidence.legal.privacyPolicyUrl !== "https://yi.rich-tide.com/privacy" ||
+      evidence.legal.termsUrl !== "https://yi.rich-tide.com/terms") {
+    throw new Error("Production blocked: legal evidence does not match the published company, contact, privacy, and terms details.");
   }
   const packageJson = JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as { dependencies?: Record<string, string> };
   if (packageJson.dependencies?.openai !== "7.4.0") throw new Error("Production blocked: openai must remain pinned to exactly 7.4.0.");
@@ -75,14 +93,28 @@ async function main() {
   }
   const listed = z.array(z.object({ name: z.string() }).passthrough()).parse(JSON.parse(secretOutput));
   const names = new Set(listed.map((secret) => secret.name));
-  const required = [
-    "DEEPSEEK_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "BETTER_AUTH_SECRET",
-    "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET",
-    "TURNSTILE_SECRET", "SHARE_SIGNING_KEY", "ADMIN_EMAILS",
-  ];
+  const required = ["DEEPSEEK_API_KEY", "BETTER_AUTH_SECRET", "TURNSTILE_SECRET", "SHARE_SIGNING_KEY", "ADMIN_EMAILS"];
   const missing = required.filter((name) => !names.has(name));
   if (missing.length) throw new Error(`Production blocked: missing Worker secrets: ${missing.join(", ")}`);
-  console.log("Production release gate passed: catalog, legal evidence, acceptance evidence, domain, bindings, public widget, and secrets are complete.");
+
+  const pairedIntegration = (label: string, pair: readonly [string, string]) => {
+    const present = pair.filter((name) => names.has(name));
+    if (present.length === 1) throw new Error(`Production blocked: ${label} credentials are only partially configured.`);
+    return present.length === 2;
+  };
+  const stripeEnabled = pairedIntegration("Stripe", ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]);
+  const googleEnabled = pairedIntegration("Google OAuth", ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]);
+  const microsoftEnabled = pairedIntegration("Microsoft OAuth", ["MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET"]);
+  if (stripeEnabled && (!evidence.acceptance.stripeSandboxWebhookTestedAt || !evidence.acceptance.stripeLiveWebhookTestedAt)) {
+    throw new Error("Production blocked: configured Stripe credentials require sandbox and live webhook evidence.");
+  }
+  if (googleEnabled && !evidence.acceptance.googleOAuthTestedAt) {
+    throw new Error("Production blocked: configured Google OAuth requires callback acceptance evidence.");
+  }
+  if (microsoftEnabled && !evidence.acceptance.microsoftOAuthTestedAt) {
+    throw new Error("Production blocked: configured Microsoft OAuth requires callback acceptance evidence.");
+  }
+  console.log(`Production release gate passed. Optional integrations: Stripe ${stripeEnabled ? "enabled" : "disabled"}, Google ${googleEnabled ? "enabled" : "disabled"}, Microsoft ${microsoftEnabled ? "enabled" : "disabled"}.`);
 }
 
 main().catch((error) => {

@@ -30,17 +30,17 @@ app.use("*", async (c, next) => {
 app.use("*", secureHeaders({
   contentSecurityPolicy: {
     defaultSrc: ["'self'"],
-    scriptSrc: ["'self'", "https://challenges.cloudflare.com"],
+    scriptSrc: ["'self'", "https://challenges.cloudflare.com", "https://static.cloudflareinsights.com"],
     styleSrc: ["'self'", "'unsafe-inline'"],
     imgSrc: ["'self'", "data:", "blob:"],
-    connectSrc: ["'self'", "https://challenges.cloudflare.com", "wss:"],
+    connectSrc: ["'self'", "https://challenges.cloudflare.com", "https://cloudflareinsights.com", "wss:"],
     frameSrc: ["https://challenges.cloudflare.com"],
     fontSrc: ["'self'", "data:"],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],
     frameAncestors: ["'none'"],
   },
-  referrerPolicy: "strict-origin-when-cross-origin",
+  referrerPolicy: "strict-origin",
   crossOriginOpenerPolicy: "same-origin",
 }));
 
@@ -66,14 +66,21 @@ app.use("/api/auth/*", async (c, next) => {
 
 app.on(["GET", "POST"], "/api/auth/*", (c) => createAuth(c.env, c.executionCtx).handler(c.req.raw));
 
-app.get("/api/v1/status", async (c) => c.json({
-  schemaVersion: "service-status@1",
-  environment: c.env.APP_ENV,
-  deterministicReadings: true,
-  aiEnabled: await isProviderEnabled(c.env),
-  catalogReviewed: c.env.CATALOG_REVIEWED === "true",
-  subscriptionsEnabled: false,
-}));
+app.get("/api/v1/status", async (c) => {
+  c.header("Cache-Control", "no-store");
+  return c.json({
+    schemaVersion: "service-status@1",
+    environment: c.env.APP_ENV,
+    deterministicReadings: true,
+    aiEnabled: await isProviderEnabled(c.env),
+    catalogReviewed: c.env.CATALOG_REVIEWED === "true",
+    emailPasswordEnabled: Boolean(c.env.BETTER_AUTH_SECRET),
+    googleAuthEnabled: Boolean(c.env.GOOGLE_CLIENT_ID && c.env.GOOGLE_CLIENT_SECRET),
+    microsoftAuthEnabled: Boolean(c.env.MICROSOFT_CLIENT_ID && c.env.MICROSOFT_CLIENT_SECRET),
+    paymentsEnabled: Boolean(c.env.STRIPE_SECRET_KEY && c.env.STRIPE_WEBHOOK_SECRET),
+    subscriptionsEnabled: false,
+  });
+});
 
 app.route("/api/v1/readings", readingRoutes);
 app.route("/api/v1/history", historyRoutes);

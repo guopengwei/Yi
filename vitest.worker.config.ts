@@ -10,7 +10,7 @@ export default defineConfig({
     miniflare: {
       bindings: {
         TEST_MIGRATIONS: migrations,
-        BETTER_AUTH_SECRET: "worker-test-secret-worker-test-secret",
+        BETTER_AUTH_SECRET: "9f21b532518c71a903fb95c66a16b3ccedc8648d24b3ecda7b7753cfec4279cf",
         SHARE_SIGNING_KEY: "share-test-secret-share-test-secret",
         TURNSTILE_SECRET: "1x0000000000000000000000000000000AA",
         STRIPE_SECRET_KEY: "sk_test_yi_worker_tests",

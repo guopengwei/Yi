@@ -41,11 +41,12 @@ describe("transactional email templates", () => {
     ["zh-CN", "验证你的 Yi · 易 账户"],
     ["en", "Verify your Yi account"],
   ] as const)("sends a localized %s verification message", async (locale, subject) => {
-    const send = vi.fn(async (_message: { subject: string; text: string; html: string }) => undefined);
+    const send = vi.fn(async (_message: { subject: string; text: string; html: string; from: { email: string }; replyTo: string }) => undefined);
     await sendTransactionalEmail({
       EMAIL: { send },
-      EMAIL_FROM: "hello@yi.example.test",
-      SUPPORT_EMAIL: "support@yi.example.test",
+      EMAIL_FROM: "no-reply@example.test",
+      HELLO_EMAIL: "hello@example.test",
+      SUPPORT_EMAIL: "contact@example.test",
     } as unknown as Env, {
       to: "reader@example.test",
       kind: "verify",
@@ -55,8 +56,27 @@ describe("transactional email templates", () => {
     expect(send).toHaveBeenCalledOnce();
     const message = send.mock.calls[0]![0];
     expect(message.subject).toBe(subject);
+    expect(message.from.email).toBe("no-reply@example.test");
+    expect(message.replyTo).toBe("contact@example.test");
     expect(message.text).toContain("https://yi.example.test/verify?token=<private>");
     expect(message.html).not.toContain("token=<private>");
     expect(message.html).toContain("token=&lt;private&gt;");
+  });
+
+  it("uses the conversational sender for welcome and contact acknowledgements", async () => {
+    const send = vi.fn(async (_message: { from: { email: string }; replyTo: string }) => undefined);
+    const env = {
+      EMAIL: { send },
+      EMAIL_FROM: "no-reply@example.test",
+      HELLO_EMAIL: "hello@example.test",
+      SUPPORT_EMAIL: "contact@example.test",
+    } as unknown as Env;
+    await sendTransactionalEmail(env, { to: "reader@example.test", kind: "welcome", locale: "en" });
+    await sendTransactionalEmail(env, { to: "reader@example.test", kind: "contact-received", locale: "en" });
+    expect(send).toHaveBeenCalledTimes(2);
+    for (const [message] of send.mock.calls) {
+      expect(message.from.email).toBe("hello@example.test");
+      expect(message.replyTo).toBe("contact@example.test");
+    }
   });
 });

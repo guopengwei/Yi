@@ -114,6 +114,9 @@ routes.post("/:id/contribution", async (c) => {
     return c.json({ schemaVersion: "contribution@1", status: "ready", readingId: reading.id });
   }
 
+  if (!c.env.STRIPE_SECRET_KEY || !c.env.STRIPE_WEBHOOK_SECRET) {
+    throw new ApiError("PAYMENTS_NOT_CONFIGURED", 503, "Positive contributions are temporarily unavailable.");
+  }
   await enforceRateLimit(c.env, { bucket: "payment-create", identity: `${identity.key}:${clientIp(c)}`, limit: 8, windowMs: 60 * 60 * 1000 });
   await verifyTurnstile(c.env, { token: body.turnstileToken, action: "payment_create", remoteIp: clientIp(c), idempotencyKey });
   if (!prior) {

@@ -36,7 +36,7 @@ routes.post("/", async (c) => {
     sendTransactionalEmail(c.env, { to: body.email, kind: "contact-received", locale: body.locale }),
     c.env.EMAIL.send({
       to: c.env.SUPPORT_EMAIL,
-      from: { email: c.env.EMAIL_FROM, name: "Yi · 易 contact" },
+      from: { email: c.env.HELLO_EMAIL, name: "Yi · 易 contact" },
       replyTo: body.email,
       subject: `[Yi contact ${id}] ${body.subject}`,
       text: `Contact ID: ${id}\nLocale: ${body.locale}\nReply to: ${body.email}\n\n${body.message}`,

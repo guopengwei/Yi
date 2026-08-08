@@ -30,9 +30,9 @@ test("completes a reviewed three-number cast with HK$0", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Your question").fill("What is one reversible next step?");
   await page.getByRole("button", { name: "Choose a casting method" }).click();
-  await page.getByLabel("Upper trigram (1–8)").fill("1");
-  await page.getByLabel("Lower trigram (1–8)").fill("8");
-  await page.getByLabel("Changing line (1–6)").fill("1");
+  await page.getByLabel("Upper trigram (1-8)").fill("1");
+  await page.getByLabel("Lower trigram (1-8)").fill("8");
+  await page.getByLabel("Changing line (1-6)").fill("1");
   await page.getByRole("button", { name: "Review the lines" }).click();
   await expect(page.getByText("Lines are shown bottom to top.")).toBeVisible();
   await page.getByRole("button", { name: "Confirm and choose contribution" }).click();
@@ -67,6 +67,25 @@ test("keeps public utility routes free of serious accessibility violations", asy
     });
     expect(ids, route).toEqual([]);
   }
+});
+
+test("completes the password-reset landing flow and hides unavailable social providers", async ({ page }) => {
+  await useLocale(page, "en");
+  let resetBody: { newPassword?: string; token?: string } | undefined;
+  await page.route("**/api/auth/reset-password", async (route) => {
+    resetBody = route.request().postDataJSON() as { newPassword?: string; token?: string };
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: true }) });
+  });
+  await page.goto("/auth?token=reset-token-for-browser-acceptance");
+  await expect(page.getByRole("heading", { name: "Set a new password" })).toBeVisible();
+  await page.getByLabel("Password (10+ characters)").fill("replacement-passphrase");
+  await page.getByLabel("Confirm new password").fill("replacement-passphrase");
+  await page.getByRole("button", { name: "Update password" }).click();
+  await expect(page.getByRole("status")).toContainText("Password updated");
+  expect(resetBody).toEqual({ newPassword: "replacement-passphrase", token: "reset-token-for-browser-acceptance" });
+  await expect(page).toHaveURL(/\/auth$/);
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Continue with Microsoft" })).toHaveCount(0);
 });
 
 test("matches the responsive landing visual", async ({ page }) => {

@@ -35,6 +35,7 @@ export function ReadingPage() {
   const [includeQuestion, setIncludeQuestion] = useState(false);
   const [includeSources, setIncludeSources] = useState(false);
   const [turnstile, setTurnstile] = useState("");
+  const [turnstileReset, setTurnstileReset] = useState(0);
   const [busy, setBusy] = useState(false);
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
@@ -68,7 +69,10 @@ export function ReadingPage() {
       });
       setConsentOpen(false); await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : t("common.error")); }
-    finally { setBusy(false); }
+    finally {
+      setBusy(false);
+      if (!session) { setTurnstile(""); setTurnstileReset((value) => value + 1); }
+    }
   };
   const archive = async () => {
     if (!id) return;
@@ -121,7 +125,7 @@ export function ReadingPage() {
       <div className="section-title"><p className="eyebrow">Optional / DeepSeek</p><h2>{t("result.reflection")}</h2></div>
       {reading.reflection ? <div className="reflection-card glass-panel"><h3>{reading.reflection.summary}</h3><p>{reading.reflection.perspective}</p><ol>{reading.reflection.questionsToConsider.map((question) => <li key={question}>{question}</li>)}</ol>{reading.reflection.cautions.map((caution) => <p className="caution" key={caution}>{caution}</p>)}</div>
         : !consentOpen ? <button className="button primary" onClick={() => setConsentOpen(true)}>{t("result.askReflection")}</button>
-          : <div className="consent-card glass-panel"><h3>{t("consent.title")}</h3><p>{t("consent.body")}</p><label className="check-row important"><input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} /><span>{t("consent.facts")}</span></label><label className="check-row"><input type="checkbox" checked={includeQuestion} onChange={(event) => setIncludeQuestion(event.target.checked)} /><span>{t("consent.question")}</span></label><label className="check-row"><input type="checkbox" checked={includeSources} onChange={(event) => setIncludeSources(event.target.checked)} /><span>{t("consent.sources")}</span></label>{!session && <Turnstile action="guest_ai" onToken={setTurnstile} />}<div className="button-row"><button className="button quiet" onClick={() => setConsentOpen(false)}>{t("consent.decline")}</button><button className="button primary" disabled={!agreed || busy || (!session && !turnstile)} onClick={() => void reflection()}>{busy ? t("common.loading") : t("consent.submit")}</button></div></div>}
+          : <div className="consent-card glass-panel"><h3>{t("consent.title")}</h3><p>{t("consent.body")}</p><label className="check-row important"><input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} /><span>{t("consent.facts")}</span></label><label className="check-row"><input type="checkbox" checked={includeQuestion} onChange={(event) => setIncludeQuestion(event.target.checked)} /><span>{t("consent.question")}</span></label><label className="check-row"><input type="checkbox" checked={includeSources} onChange={(event) => setIncludeSources(event.target.checked)} /><span>{t("consent.sources")}</span></label>{!session && <Turnstile action="guest_ai" onToken={setTurnstile} resetKey={turnstileReset} />}<div className="button-row"><button className="button quiet" onClick={() => setConsentOpen(false)}>{t("consent.decline")}</button><button className="button primary" disabled={!agreed || busy || (!session && !turnstile)} onClick={() => void reflection()}>{busy ? t("common.loading") : t("consent.submit")}</button></div></div>}
     </section>
     {error && <p className="form-error" role="alert">{error}</p>}
     <section className="result-actions glass-panel">

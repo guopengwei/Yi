@@ -35,18 +35,19 @@
   "send_email": [
     {
       "name": "EMAIL",
-      "allowed_sender_addresses": ["hello@yi.rich-tide.com", "support@yi.rich-tide.com"]
+      "allowed_sender_addresses": ["hello@rich-tide.com", "no-reply@rich-tide.com", "contact@rich-tide.com"]
     }
   ],
   "secrets": {
-    "required": ["DEEPSEEK_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "BETTER_AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "TURNSTILE_SECRET", "SHARE_SIGNING_KEY", "ADMIN_EMAILS"]
+    "required": ["DEEPSEEK_API_KEY", "BETTER_AUTH_SECRET", "TURNSTILE_SECRET", "SHARE_SIGNING_KEY", "ADMIN_EMAILS"]
   },
   "vars": {
     "APP_ENV": "development",
     "APP_ORIGIN": "http://localhost:5173",
     "ALLOWED_TURNSTILE_HOSTNAMES": "localhost,127.0.0.1",
-    "EMAIL_FROM": "hello@yi.rich-tide.com",
-    "SUPPORT_EMAIL": "support@yi.rich-tide.com",
+    "EMAIL_FROM": "no-reply@rich-tide.com",
+    "HELLO_EMAIL": "hello@rich-tide.com",
+    "SUPPORT_EMAIL": "contact@rich-tide.com",
     "CATALOG_REVIEWED": "false",
     "AI_ENABLED": "false",
     "GLOBAL_DAILY_TOKEN_BUDGET": "250000",
@@ -63,8 +64,9 @@
         "APP_ENV": "preview",
         "APP_ORIGIN": "https://preview.yi.rich-tide.com",
         "ALLOWED_TURNSTILE_HOSTNAMES": "preview.yi.rich-tide.com",
-        "EMAIL_FROM": "hello@yi.rich-tide.com",
-        "SUPPORT_EMAIL": "support@yi.rich-tide.com",
+        "EMAIL_FROM": "no-reply@rich-tide.com",
+        "HELLO_EMAIL": "hello@rich-tide.com",
+        "SUPPORT_EMAIL": "contact@rich-tide.com",
         "CATALOG_REVIEWED": "true",
         "AI_ENABLED": "true",
         "GLOBAL_DAILY_TOKEN_BUDGET": "250000",
@@ -91,11 +93,11 @@
       "send_email": [
         {
           "name": "EMAIL",
-          "allowed_sender_addresses": ["hello@yi.rich-tide.com", "support@yi.rich-tide.com"]
+          "allowed_sender_addresses": ["hello@rich-tide.com", "no-reply@rich-tide.com", "contact@rich-tide.com"]
         }
       ],
       "secrets": {
-        "required": ["DEEPSEEK_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "BETTER_AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "TURNSTILE_SECRET", "SHARE_SIGNING_KEY", "ADMIN_EMAILS"]
+        "required": ["DEEPSEEK_API_KEY", "BETTER_AUTH_SECRET", "TURNSTILE_SECRET", "SHARE_SIGNING_KEY", "ADMIN_EMAILS"]
       },
       "triggers": { "crons": ["0 3 * * *"] },
       "routes": [{ "pattern": "preview.yi.rich-tide.com", "custom_domain": true }]
@@ -106,8 +108,9 @@
         "APP_ENV": "production",
         "APP_ORIGIN": "https://yi.rich-tide.com",
         "ALLOWED_TURNSTILE_HOSTNAMES": "yi.rich-tide.com",
-        "EMAIL_FROM": "hello@yi.rich-tide.com",
-        "SUPPORT_EMAIL": "support@yi.rich-tide.com",
+        "EMAIL_FROM": "no-reply@rich-tide.com",
+        "HELLO_EMAIL": "hello@rich-tide.com",
+        "SUPPORT_EMAIL": "contact@rich-tide.com",
         "CATALOG_REVIEWED": "true",
         "AI_ENABLED": "true",
         "GLOBAL_DAILY_TOKEN_BUDGET": "250000",
@@ -134,11 +137,11 @@
       "send_email": [
         {
           "name": "EMAIL",
-          "allowed_sender_addresses": ["hello@yi.rich-tide.com", "support@yi.rich-tide.com"]
+          "allowed_sender_addresses": ["hello@rich-tide.com", "no-reply@rich-tide.com", "contact@rich-tide.com"]
         }
       ],
       "secrets": {
-        "required": ["DEEPSEEK_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "BETTER_AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "TURNSTILE_SECRET", "SHARE_SIGNING_KEY", "ADMIN_EMAILS"]
+        "required": ["DEEPSEEK_API_KEY", "BETTER_AUTH_SECRET", "TURNSTILE_SECRET", "SHARE_SIGNING_KEY", "ADMIN_EMAILS"]
       },
       "triggers": { "crons": ["0 3 * * *"] },
       "routes": [{ "pattern": "yi.rich-tide.com", "custom_domain": true }]

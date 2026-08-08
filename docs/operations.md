@@ -9,18 +9,18 @@ npx wrangler d1 create yi-db-preview
 npm run db:migrate:preview
 ```
 
-Configure Cloudflare Email Routing and verify `hello@yi.rich-tide.com` and `support@yi.rich-tide.com` as allowed senders before using the `EMAIL` binding. Create a Turnstile widget restricted to `preview.yi.rich-tide.com`, store its public key in `.env.staging`, and its secret with Wrangler.
+Onboard `rich-tide.com` in Cloudflare Email Sending. Restrict the Worker binding to `no-reply@rich-tide.com` for security mail, `hello@rich-tide.com` for welcome and acknowledgement mail, and `contact@rich-tide.com` for human replies. Route `contact@rich-tide.com` to a verified destination. Create a Turnstile widget restricted to `preview.yi.rich-tide.com`, store its public key in `.env.staging`, and its secret with Wrangler.
 
-## 2. Configure identity providers
+## 2. Configure optional identity providers
 
-Set Better Auth, Google and Microsoft secrets in each environment. Register these exact production callbacks:
+Better Auth email/password sign-in is the core account path. Google and Microsoft are optional: configure each provider only as a complete client-ID/client-secret pair. The UI hides any provider whose pair is absent. When enabling them, register these exact production callbacks:
 
 - `https://yi.rich-tide.com/api/auth/callback/google`
 - `https://yi.rich-tide.com/api/auth/callback/microsoft`
 
 Use the corresponding preview origin for preview clients. Microsoft must request `openid profile email`; do not synthesize an address for profiles that do not return a deliverable email.
 
-## 3. Configure Stripe
+## 3. Configure optional Stripe payments
 
 Use a Hong Kong Stripe account and HKD prices. Keep dynamic payment methods enabled in Stripe Dashboard so eligible cards, Alipay and WeChat Pay can be offered without hard-coded method lists.
 
@@ -51,20 +51,22 @@ Only after editorial verification should `CATALOG_REVIEWED` and `AI_ENABLED` bec
 
 ## 5. Secrets
 
-Set these separately in preview and production; never place them in Vite public environment files:
+Set these core secrets separately in preview and production; never place them in Vite public environment files:
 
 ```text
 DEEPSEEK_API_KEY
-STRIPE_SECRET_KEY
-STRIPE_WEBHOOK_SECRET
 BETTER_AUTH_SECRET
-GOOGLE_CLIENT_ID
-GOOGLE_CLIENT_SECRET
-MICROSOFT_CLIENT_ID
-MICROSOFT_CLIENT_SECRET
 TURNSTILE_SECRET
 SHARE_SIGNING_KEY
 ADMIN_EMAILS
+```
+
+Optional integrations use complete credential pairs. An absent pair disables and hides that integration; a partial pair fails the release gate:
+
+```text
+STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET
+GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET
+MICROSOFT_CLIENT_ID + MICROSOFT_CLIENT_SECRET
 ```
 
 Use at least 32 random bytes for `BETTER_AUTH_SECRET` and `SHARE_SIGNING_KEY`. `ADMIN_EMAILS` is a comma-separated allowlist; promotion occurs only at account creation and all admin endpoints still verify the stored role.
@@ -73,7 +75,7 @@ Use at least 32 random bytes for `BETTER_AUTH_SECRET` and `SHARE_SIGNING_KEY`. `
 
 1. Create `yi-db`, replace its D1 placeholder, and apply migrations.
 2. Create the production Turnstile widget restricted to `yi.rich-tide.com`; put only its site key in `.env.production`.
-3. Populate all production secrets with `wrangler secret put --env production`.
+3. Populate the core production secrets with `wrangler secret put --env production`; add optional credential pairs only when their acceptance checks are ready.
 4. Import the approved catalog and confirm exactly 1,350 active entries.
 5. Complete `config/production-evidence.json` from the example with legal identity, policy URLs and credentialed smoke-test timestamps.
 6. Set production `CATALOG_REVIEWED` and `AI_ENABLED` true only after the preceding checks.

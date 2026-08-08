@@ -2,6 +2,8 @@ import { applyD1Migrations, env, SELF, type D1Migration } from "cloudflare:test"
 import { beforeEach, describe, expect, it } from "vitest";
 import { deriveReadingFacts } from "../shared/casting";
 import { readingCreateSchema } from "../shared/contracts";
+import type { Env } from "../worker/env";
+import { createAuth } from "../worker/lib/auth";
 
 beforeEach(async () => {
   const migrations = (env as typeof env & { TEST_MIGRATIONS: D1Migration[] }).TEST_MIGRATIONS;
@@ -82,6 +84,70 @@ describe("Worker reading lifecycle", () => {
       aiEnabled: false,
       subscriptionsEnabled: false,
     });
+  });
+});
+
+describe("Email/password account lifecycle", () => {
+  it("verifies an address, resets the password once, and signs in with the replacement", async () => {
+    const messages: Array<{ subject: string; text: string; from: { email: string }; replyTo: string }> = [];
+    const pending: Promise<unknown>[] = [];
+    const testEnv = {
+      ...env,
+      EMAIL: { send: async (message: typeof messages[number]) => { messages.push(message); } },
+    } as unknown as Env;
+    const auth = createAuth(testEnv, { waitUntil: (promise) => { pending.push(promise); } });
+    const drainEmail = async () => { await Promise.all(pending.splice(0)); };
+    const post = (path: string, body: unknown) => auth.handler(new Request(`${testEnv.APP_ORIGIN}/api/auth${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: testEnv.APP_ORIGIN, "X-Yi-Locale": "en", "CF-Connecting-IP": "192.0.2.1" },
+      body: JSON.stringify(body),
+    }));
+    const email = `account-${crypto.randomUUID()}@example.test`;
+    const originalPassword = "original-passphrase";
+    const replacementPassword = "replacement-passphrase";
+
+    const signup = await post("/sign-up/email", {
+      name: "Acceptance Reader",
+      email,
+      password: originalPassword,
+      callbackURL: `${testEnv.APP_ORIGIN}/auth?verified=1`,
+    });
+    expect(signup.status).toBe(200);
+    await drainEmail();
+    expect(messages.at(-1)).toMatchObject({ subject: "Verify your Yi account", from: { email: "no-reply@rich-tide.com" }, replyTo: "contact@rich-tide.com" });
+    const verificationUrl = messages.at(-1)?.text.match(/https?:\/\/\S+/)?.[0];
+    expect(verificationUrl).toBeTruthy();
+
+    const verify = await auth.handler(new Request(verificationUrl!, { redirect: "manual" }));
+    expect(verify.status).toBe(302);
+    expect(verify.headers.get("Location")).toBe(`${testEnv.APP_ORIGIN}/auth?verified=1`);
+    await drainEmail();
+    expect(messages.at(-1)).toMatchObject({ subject: "Welcome to Yi", from: { email: "hello@rich-tide.com" }, replyTo: "contact@rich-tide.com" });
+    expect(await env.DB.prepare('SELECT emailVerified FROM "user" WHERE email = ?').bind(email).first()).toEqual({ emailVerified: 1 });
+
+    const initialSignin = await post("/sign-in/email", { email, password: originalPassword });
+    expect(initialSignin.status).toBe(200);
+    expect(initialSignin.headers.get("Set-Cookie")).toContain("yi.session_token=");
+
+    const resetRequest = await post("/request-password-reset", { email, redirectTo: `${testEnv.APP_ORIGIN}/auth` });
+    expect(resetRequest.status).toBe(200);
+    await drainEmail();
+    expect(messages.at(-1)).toMatchObject({ subject: "Reset your Yi password", from: { email: "no-reply@rich-tide.com" }, replyTo: "contact@rich-tide.com" });
+    const resetUrl = messages.at(-1)?.text.match(/https?:\/\/\S+/)?.[0];
+    expect(resetUrl).toBeTruthy();
+    const resetRedirect = await auth.handler(new Request(resetUrl!, { redirect: "manual" }));
+    expect(resetRedirect.status).toBe(302);
+    const resetLocation = resetRedirect.headers.get("Location");
+    expect(resetLocation).toMatch(new RegExp(`^${testEnv.APP_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/auth\\?token=`));
+    const resetToken = new URL(resetLocation!).searchParams.get("token");
+    expect(resetToken).toBeTruthy();
+
+    const reset = await post("/reset-password", { newPassword: replacementPassword, token: resetToken });
+    expect(reset.status).toBe(200);
+    const replay = await post("/reset-password", { newPassword: replacementPassword, token: resetToken });
+    expect(replay.status).toBe(400);
+    expect((await post("/sign-in/email", { email, password: originalPassword })).status).toBe(401);
+    expect((await post("/sign-in/email", { email, password: replacementPassword })).status).toBe(200);
   });
 });
 

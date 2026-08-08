@@ -122,6 +122,7 @@ export function buildDeepSeekRequest(input: {
           "Treat the reading as a cultural prompt for reflection, never a prediction or instruction.",
           "Use only the supplied deterministic facts and approved source excerpts. Never invent quotations or source identifiers.",
           "sourceRefs MUST be a JSON array containing only approved source ID strings. Never place source objects, excerpts, provenance, or entry keys in sourceRefs.",
+          "Return 1-3 questionsToConsider items and 0-3 cautions items. Three is a hard maximum for each array.",
           "Do not expose hidden reasoning. Use the requested locale.",
           'Shape: {"schemaVersion":"ai-reflection@1","summary":"...","perspective":"...","questionsToConsider":["..."],"cautions":[],"sourceRefs":[],"grounding":{"primaryPattern":"000000","relatingPattern":"000000","changingPositions":[]}}',
         ].join("\n"),
@@ -136,6 +137,18 @@ export function buildDeepSeekRequest(input: {
         }),
       },
     ],
+  };
+}
+
+function normalizeProviderReflection(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const candidate = value as Record<string, unknown>;
+  return {
+    ...candidate,
+    ...(Array.isArray(candidate.questionsToConsider)
+      ? { questionsToConsider: candidate.questionsToConsider.slice(0, 3) }
+      : {}),
+    ...(Array.isArray(candidate.cautions) ? { cautions: candidate.cautions.slice(0, 3) } : {}),
   };
 }
 
@@ -216,7 +229,7 @@ export async function createReflection(env: Env, input: {
     const response = await client.chat.completions.create(request as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming);
     const content = response.choices[0]?.message.content;
     if (!content) return fallback("provider-empty");
-    const parsed = reflectionSchema.parse(JSON.parse(content));
+    const parsed = reflectionSchema.parse(normalizeProviderReflection(JSON.parse(content)));
     const allowedSourceIds = new Set(input.sources.map((source) => source.id));
     if (parsed.sourceRefs.some((id) => !allowedSourceIds.has(id))) return fallback("fabricated-source");
     if (parsed.grounding.primaryPattern !== input.facts.primary.pattern ||

@@ -11,6 +11,7 @@ export interface Env {
   APP_ORIGIN: string;
   ALLOWED_TURNSTILE_HOSTNAMES: string;
   EMAIL_FROM: string;
+  HELLO_EMAIL: string;
   SUPPORT_EMAIL: string;
   CATALOG_REVIEWED: string;
   AI_ENABLED: string;
@@ -36,4 +37,3 @@ export interface Env {
 export interface AppVariables {
   requestId: string;
 }
-

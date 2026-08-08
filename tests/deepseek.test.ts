@@ -94,4 +94,35 @@ describe("DeepSeek adapter", () => {
     expect(result.fallbackReason).toBe("fabricated-source");
     expect(JSON.stringify(result)).not.toContain("reasoning_content");
   });
+
+  it("bounds excess provider questions and cautions before strict validation", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      id: "chatcmpl-bounded",
+      object: "chat.completion",
+      created: 1,
+      model: "deepseek-v4-flash",
+      choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: JSON.stringify({
+        schemaVersion: "ai-reflection@1",
+        summary: "A summary",
+        perspective: "A perspective",
+        questionsToConsider: ["One?", "Two?", "Three?", "Four?"],
+        cautions: ["One.", "Two.", "Three.", "Four."],
+        sourceRefs: [source.id],
+        grounding: { primaryPattern: facts.primary.pattern, relatingPattern: facts.relating.pattern, changingPositions: facts.cast.changingPositions },
+      }) } }],
+      usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const result = await createReflection(env(), {
+      facts,
+      question: { kind: "none" },
+      locale: "en",
+      includeQuestion: false,
+      sources: [source],
+      safetyRouted: false,
+      providerAllowed: true,
+    });
+    expect(result.fallbackReason).toBeNull();
+    expect(result.reflection.questionsToConsider).toHaveLength(3);
+    expect(result.reflection.cautions).toHaveLength(3);
+  });
 });

@@ -15,12 +15,22 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     },
   });
   if (response.status === 204) return undefined as T;
-  const body = await response.json().catch(() => null) as { error?: { code?: string; message?: string; retryable?: boolean } } | null;
-  if (!response.ok) throw new ClientApiError(body?.error?.code ?? "REQUEST_FAILED", response.status, body?.error?.message ?? "Request failed", body?.error?.retryable ?? false);
+  const body = await response.json().catch(() => null) as {
+    code?: string;
+    message?: string;
+    error?: { code?: string; message?: string; retryable?: boolean };
+  } | null;
+  if (!response.ok) {
+    throw new ClientApiError(
+      body?.error?.code ?? body?.code ?? "REQUEST_FAILED",
+      response.status,
+      body?.error?.message ?? body?.message ?? "Request failed",
+      body?.error?.retryable ?? false,
+    );
+  }
   return body as T;
 }
 
 export function postJson<T>(path: string, body: unknown, headers?: HeadersInit) {
   return api<T>(path, { method: "POST", body: JSON.stringify(body), headers });
 }
-
