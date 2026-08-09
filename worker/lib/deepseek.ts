@@ -281,7 +281,7 @@ export async function createChatReply(env: Env, input: {
     content: input.context.locale === "en"
       ? `I can help you examine the reading facts, but the reviewed source-grounded AI service is unavailable (${reason}). What part of the situation is within your control today?`
       : input.context.locale === "zh-CN"
-        ? `我可以陪你梳理卦象事实，但经审核、以来源为依据的 AI 服务目前不可用（${reason}）。今天有哪些部分是你可以控制的？`
+        ? `我可以陪你梳理卦象事实，但经审核、基于来源的 AI 服务目前不可用（${reason}）。今天有哪些部分是你可以控制的？`
         : `我可以陪你梳理卦象事實，但經審核、以來源為依據的 AI 服務目前不可用（${reason}）。今天有哪些部分是你可以控制的？`,
     fallbackReason: reason,
     usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, spendMicros: 0 },

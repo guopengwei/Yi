@@ -18,17 +18,17 @@ function copy(kind: TemplateKind, locale: Locale, url?: string) {
   const content: Record<Locale, Record<TemplateKind, { lead: string; action?: string }>> = {
     "zh-HK": {
       verify: { lead: "請驗證你的電郵地址，以完成帳戶設定。", action: "驗證電郵" },
-      reset: { lead: "我們收到重設密碼的請求。如果不是你提出的，可忽略此郵件。", action: "重設密碼" },
-      welcome: { lead: "你的帳戶已準備好。願每次閱讀都為你留下更清楚的問題。" },
+      reset: { lead: "我們收到重設密碼的請求。如非你本人提出，可忽略此郵件。", action: "重設密碼" },
+      welcome: { lead: "你的帳戶已準備好。願每次閱讀，都能讓你帶著更清晰的問題。" },
       "contact-received": { lead: "謝謝你的來信。我們會按順序回覆。" },
-      delete: { lead: "你要求刪除帳戶及所有已儲存資料。此操作無法復原；請使用以下連結確認。", action: "確認刪除" },
+      delete: { lead: "你要求刪除帳戶及所有已儲存資料。此操作無法復原；請按以下連結確認。", action: "確認刪除" },
     },
     "zh-CN": {
       verify: { lead: "请验证你的邮箱地址，以完成账户设置。", action: "验证邮箱" },
-      reset: { lead: "我们收到重置密码的请求。如果不是你提出的，可以忽略此邮件。", action: "重置密码" },
-      welcome: { lead: "你的账户已准备好。愿每次阅读都为你留下更清楚的问题。" },
+      reset: { lead: "我们收到重置密码的请求。如非你本人提出，可忽略此邮件。", action: "重置密码" },
+      welcome: { lead: "你的账户已准备好。愿每次阅读，都能让你带着更清晰的问题。" },
       "contact-received": { lead: "谢谢你的来信。我们会按顺序回复。" },
-      delete: { lead: "你要求删除账户及所有已保存数据。此操作无法恢复；请使用以下链接确认。", action: "确认删除" },
+      delete: { lead: "你要求删除账户及所有已保存数据。此操作无法恢复；请点击以下链接确认。", action: "确认删除" },
     },
     en: {
       verify: { lead: "Verify your email address to finish setting up your account.", action: "Verify email" },
