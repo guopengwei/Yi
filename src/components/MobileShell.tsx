@@ -66,7 +66,7 @@ export function MobileShellChrome({ children }: { children: ReactNode }) {
     </header>
     <main id="main">{children}</main>
     <footer className="site-footer">
-      <div><span className="footer-mark">易</span><p>{t("hero.privacy")}</p></div>
+      <div><span className="footer-mark">易</span></div>
       <div className="footer-legal"><Link to="/privacy">{legal.privacy}</Link><Link to="/terms">{legal.terms}</Link><p>© {new Date().getFullYear()} {legal.company} · Hong Kong</p></div>
     </footer>
     <MobileBottomNav />
@@ -134,7 +134,6 @@ function MoreSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
       </nav>
       <label className="sheet-locale"><span>{t("settings.locale")}</span><select value={i18n.language} onChange={(event) => void chooseLocale(event.target.value as AppLocale)}>{supportedLocales.map((value) => <option key={value} value={value}>{localeFullName(value)}</option>)}</select></label>
       <div className="sheet-legal"><Link to="/privacy">{legal.privacy}</Link><Link to="/terms">{legal.terms}</Link></div>
-      <p className="sheet-privacy">{t("hero.privacy")}</p>
     </div>
   </div>;
 }

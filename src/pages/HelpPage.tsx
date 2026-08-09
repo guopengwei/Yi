@@ -8,9 +8,9 @@ export function HelpPage() {
     <div className="editorial-grid">
       <article className="lead-article"><p>{t("help.body1")}</p><p>{t("help.body2")}</p><Link className="button primary" to="/">{t("hero.start")}</Link></article>
       <aside>
-        <div className="principle"><h2>{t("trust.deterministic")}</h2><p>{t("help.methods")}</p></div>
-        <div className="principle"><h2>{t("trust.private")}</h2><p>{t("help.privacy")}</p></div>
-        <div className="principle"><h2>{t("result.sourcePending")}</h2><p>{t("result.sourceBody")}</p></div>
+        <div className="principle"><h2>{t("features.methodsTitle")}</h2><p>{t("features.methodsBody")}</p></div>
+        <div className="principle"><h2>{t("features.interpretationTitle")}</h2><p>{t("features.interpretationBody")}</p></div>
+        <div className="principle"><h2>{t("features.chatTitle")}</h2><p>{t("features.chatBody")}</p></div>
       </aside>
     </div>
     <section className="takashima-intro" aria-labelledby="takashima-title">

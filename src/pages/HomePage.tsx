@@ -137,10 +137,10 @@ export function HomePage() {
       </div>
     </section>
 
-    <section className="trust-strip" aria-label={t("trust.label")}>
-      <strong>{t("trust.deterministic")}</strong>
-      <strong>{t("trust.reviewed")}</strong>
-      <div><strong>{t("trust.private")}</strong><span>{t("hero.privacy")}</span></div>
+    <section className="feature-strip" aria-label={t("features.label")}>
+      <article><strong>{t("features.methodsTitle")}</strong><span>{t("features.methodsBody")}</span></article>
+      <article><strong>{t("features.interpretationTitle")}</strong><span>{t("features.interpretationBody")}</span></article>
+      <article><strong>{t("features.chatTitle")}</strong><span>{t("features.chatBody")}</span></article>
     </section>
 
     <section className="composer-section" ref={composer}>
