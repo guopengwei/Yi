@@ -99,8 +99,8 @@ export class ReadingChat extends DurableObject<Env> {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("Upgrade required", { status: 426 });
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
-    server.serializeAttachment({ ownerId } satisfies ConnectionAttachment);
     this.ctx.acceptWebSocket(server);
+    server.serializeAttachment({ ownerId } satisfies ConnectionAttachment);
     const after = Number(new URL(request.url).searchParams.get("after") ?? 0);
     const messages = this.list(ownerId, Number.isSafeInteger(after) ? after : 0);
     server.send(JSON.stringify({ type: "resume", messages: messages.map(presentMessage) }));
@@ -124,10 +124,6 @@ export class ReadingChat extends DurableObject<Env> {
     } catch (error) {
       socket.send(JSON.stringify({ type: "error", code: error instanceof Error ? error.message : "CHAT_FAILED" }));
     }
-  }
-
-  webSocketClose(socket: WebSocket, code: number, reason: string): void {
-    socket.close(code, reason);
   }
 
   private authorize(ownerId: string) {

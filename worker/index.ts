@@ -27,7 +27,7 @@ app.use("*", async (c, next) => {
   c.header("X-Request-Id", c.get("requestId"));
 });
 
-app.use("*", secureHeaders({
+const applySecureHeaders = secureHeaders({
   contentSecurityPolicy: {
     defaultSrc: ["'self'"],
     scriptSrc: ["'self'", "https://challenges.cloudflare.com", "https://static.cloudflareinsights.com"],
@@ -42,7 +42,12 @@ app.use("*", secureHeaders({
   },
   referrerPolicy: "strict-origin",
   crossOriginOpenerPolicy: "same-origin",
-}));
+});
+
+app.use("*", (c, next) => {
+  if (c.req.header("Upgrade")?.toLowerCase() === "websocket") return next();
+  return applySecureHeaders(c, next);
+});
 
 app.post("/api/v1/webhooks/stripe", async (c) => {
   const result = await handleStripeWebhook(c.env, c.req.raw);

@@ -21,6 +21,36 @@ function readingBody(clientRequestId = crypto.randomUUID(), changingPosition = 1
   };
 }
 
+async function createVerifiedSessionCookie() {
+  await env.DB.prepare("DELETE FROM rateLimit").run();
+  const pending: Promise<unknown>[] = [];
+  const testEnv: Env = {
+    ...env,
+    EMAIL: { send: async () => ({ messageId: crypto.randomUUID() }) },
+  };
+  const auth = createAuth(testEnv, { waitUntil: (promise) => { pending.push(promise); } });
+  const email = `socket-${crypto.randomUUID()}@example.test`;
+  const password = "socket-repro-password";
+  const post = (path: string, body: unknown) => auth.handler(new Request(`${testEnv.APP_ORIGIN}/api/auth${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: testEnv.APP_ORIGIN,
+      "CF-Connecting-IP": "192.0.2.1",
+    },
+    body: JSON.stringify(body),
+  }));
+
+  expect((await post("/sign-up/email", { name: "Socket Repro", email, password })).status).toBe(200);
+  await Promise.all(pending.splice(0));
+  await env.DB.prepare('UPDATE "user" SET emailVerified = 1 WHERE email = ?').bind(email).run();
+  const signIn = await post("/sign-in/email", { email, password });
+  expect(signIn.status).toBe(200);
+  const sessionCookie = signIn.headers.get("Set-Cookie")?.match(/yi\.session_token=([^;]+)/)?.[0];
+  expect(sessionCookie).toBeTruthy();
+  return sessionCookie!;
+}
+
 describe("Worker reading lifecycle", () => {
   it("keeps facts hidden until HK$0 completion and makes retries idempotent", async () => {
     const clientRequestId = crypto.randomUUID();
@@ -360,6 +390,45 @@ describe("Stripe webhook authority", () => {
 });
 
 describe("Durable Object contracts", () => {
+  it("upgrades an authenticated chat through the complete Worker route", async () => {
+    const cookie = await createVerifiedSessionCookie();
+    const createReading = await SELF.fetch("https://example.test/api/v1/readings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify(readingBody()),
+    });
+    expect(createReading.status).toBe(201);
+    const reading = await createReading.json<{ id: string }>();
+    const completeReading = await SELF.fetch(`https://example.test/api/v1/readings/${reading.id}/contribution`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie, "Idempotency-Key": crypto.randomUUID() },
+      body: JSON.stringify({ amountHkd: 0 }),
+    });
+    expect(completeReading.status).toBe(200);
+
+    const conversationId = crypto.randomUUID();
+    const createChat = await SELF.fetch("https://example.test/api/v1/chats", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie, "Idempotency-Key": conversationId },
+      body: JSON.stringify({
+        readingId: reading.id,
+        consent: true,
+        includeReadingFacts: true,
+        includeQuestion: false,
+        includeSourceMaterial: false,
+      }),
+    });
+    expect(createChat.status).toBe(201);
+
+    const response = await SELF.fetch(`https://example.test/api/v1/chats/${conversationId}/socket`, {
+      headers: { Cookie: cookie, Upgrade: "websocket" },
+    });
+    expect(response.status).toBe(101);
+    expect(response.webSocket).not.toBeNull();
+    response.webSocket?.accept();
+    response.webSocket?.close(1000, "test complete");
+  });
+
   it("restores individual allowance after a provider failure", async () => {
     const coordinator = env.BUDGET.getByName(`failure-retry-${crypto.randomUUID()}`);
     const firstReservationId = crypto.randomUUID();
