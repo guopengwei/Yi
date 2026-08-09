@@ -11,6 +11,12 @@ import {
 } from "../worker/lib/deepseek";
 import type { Env } from "../worker/env";
 
+function responseText(output: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }> | undefined) {
+  return output?.flatMap((item) => item.type === "message"
+    ? item.content?.flatMap((part) => part.type === "output_text" && part.text ? [part.text] : []) ?? []
+    : []).join("") ?? "";
+}
+
 function parseEnv(source: string) {
   return new Map(source.split(/\r?\n/).flatMap((line) => {
     const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
@@ -60,28 +66,31 @@ async function main() {
   let diagnostics: Record<string, unknown> | null = null;
   if (result.fallbackReason === "provider-failure") {
     const request = buildDeepSeekRequest({ facts, question: { kind: "none" }, locale: "en", includeQuestion: false, sources: [source] });
-    const response = await fetch("https://api.deepseek.com/chat/completions", {
+    const response = await fetch("https://api.deepseek.com/responses", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify(request),
       signal: AbortSignal.timeout(30_000),
     });
     const body = await response.json() as {
+      id?: string;
+      status?: string;
       error?: { type?: string; code?: string; message?: string };
-      choices?: Array<{ finish_reason?: string; message?: { content?: string | null } }>;
+      output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
       usage?: unknown;
     };
-    const content = body.choices?.[0]?.message?.content;
+    const content = responseText(body.output);
     let parsed: Record<string, unknown> | null = null;
     if (content) {
       try { parsed = JSON.parse(content) as Record<string, unknown>; } catch { /* reported below */ }
     }
     diagnostics = {
       status: response.status,
+      responseId: body.id ?? null,
+      responseStatus: body.status ?? null,
       error: body.error ? { type: body.error.type, code: body.error.code, message: body.error.message?.slice(0, 240) } : null,
-      finishReason: body.choices?.[0]?.finish_reason ?? null,
       usage: body.usage ?? null,
-      contentLength: content?.length ?? 0,
+      contentLength: content.length,
       jsonValid: parsed !== null,
       objectKeys: parsed ? Object.keys(parsed).sort() : [],
       schemaVersion: parsed?.schemaVersion ?? null,

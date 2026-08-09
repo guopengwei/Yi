@@ -8,7 +8,11 @@ import type { Env } from "../env";
 export const DEEPSEEK_MODEL = "deepseek-v4-flash" as const;
 export const REFLECTION_PROMPT_VERSION = "yi-reflection@3" as const;
 export const REFLECTION_MAX_OUTPUT_TOKENS = 8_000;
-export const CHAT_PROMPT_VERSION = "yi-chat@2" as const;
+export const CHAT_PROMPT_VERSION = "yi-chat@3" as const;
+
+const INPUT_CACHE_HIT_MICROS_PER_MILLION = 2_800;
+const INPUT_CACHE_MISS_MICROS_PER_MILLION = 140_000;
+const OUTPUT_MICROS_PER_MILLION = 280_000;
 
 const outputLanguages: Record<Locale, string> = {
   "zh-HK": "Traditional Chinese as used in Hong Kong (繁體中文)",
@@ -89,11 +93,11 @@ export function parseSourceSnapshot(json: string | null, included: boolean): Sou
 
 export interface DeepSeekRequestBody {
   model: typeof DEEPSEEK_MODEL;
-  reasoning_effort: "high";
-  thinking: { type: "enabled" };
-  max_tokens: number;
-  response_format: { type: "json_object" };
-  messages: Array<{ role: "system" | "user"; content: string }>;
+  reasoning: { effort: "high" };
+  max_output_tokens: number;
+  text: { format: { type: "json_object" } };
+  instructions: string;
+  input: string | Array<{ role: "user" | "assistant"; content: string }>;
 }
 
 export function estimateDeepSeekReservation(payload: unknown, maxOutputTokens: number) {
@@ -101,7 +105,10 @@ export function estimateDeepSeekReservation(payload: unknown, maxOutputTokens: n
   // as a token, plus headroom for the fixed system prompt.
   const inputTokens = JSON.stringify(payload).length + 4_096;
   const estimatedTokens = inputTokens + maxOutputTokens;
-  const estimatedSpendMicros = Math.ceil((inputTokens * 140_000 + maxOutputTokens * 280_000) / 1_000_000);
+  const estimatedSpendMicros = Math.ceil((
+    inputTokens * INPUT_CACHE_MISS_MICROS_PER_MILLION
+    + maxOutputTokens * OUTPUT_MICROS_PER_MILLION
+  ) / 1_000_000);
   return { estimatedTokens, estimatedSpendMicros };
 }
 
@@ -121,44 +128,35 @@ export function buildDeepSeekRequest(input: {
   };
   return {
     model: DEEPSEEK_MODEL,
-    reasoning_effort: "high",
-    thinking: { type: "enabled" },
-    max_tokens: REFLECTION_MAX_OUTPUT_TOKENS,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content: [
-          `You are Yi, a thoughtful cultural reflection assistant. Reply only with JSON matching ${REFLECTION_PROMPT_VERSION}.`,
-          outputLanguageInstruction(input.locale),
-          "Treat the reading as a cultural prompt for reflection, never a prediction or instruction.",
-          "Use only the supplied deterministic facts and approved source excerpts. Never invent quotations or source identifiers.",
-          "The user payload's takashimaInterpretationGuidance is approved context from Takashima Donsho's Takashima Ekidan (高島吞象《高島易斷》). Use its excerpts as the primary interpretation guidance for the reflection and cite every excerpt used via its exact approved ID in sourceRefs.",
-          "Respect each excerpt's entryKey: hexagram entries are compilations of the six line texts, not independent Judgment or Image records; moving-line and special-line entries contain the corresponding complete commentary.",
-          "Produce a substantial, specific visible reflection rather than a brief overview. Keep summary to 2-4 sentences, then make perspective 700-1,100 words in English or comparably detailed in the requested Chinese locale.",
-          "Organize perspective into 6-9 clear paragraphs separated by blank lines. Examine the primary pattern, relating pattern, each supplied changing line (when any), tensions between them, at least two plausible interpretations, practical implications, uncertainties, and a grounded synthesis.",
-          "Connect every observation to supplied facts, approved source material, or explicitly label it as a reflective possibility. Do not pad, repeat the summary, or claim access to facts that were withheld.",
-          "Detailed visible analysis is required, but never reveal private chain-of-thought, hidden reasoning, or internal deliberation.",
-          "sourceRefs MUST be a JSON array containing only approved source ID strings. Never place source objects, excerpts, provenance, or entry keys in sourceRefs.",
-          "Return exactly 3 distinct questionsToConsider items and 0-3 cautions items. Three is a hard maximum for each array.",
-          "Do not expose hidden reasoning.",
-          'Shape: {"schemaVersion":"ai-reflection@1","summary":"...","perspective":"...","questionsToConsider":["..."],"cautions":[],"sourceRefs":[],"grounding":{"primaryPattern":"000000","relatingPattern":"000000","changingPositions":[]}}',
-        ].join("\n"),
+    reasoning: { effort: "high" },
+    max_output_tokens: REFLECTION_MAX_OUTPUT_TOKENS,
+    text: { format: { type: "json_object" } },
+    instructions: [
+      `You are Yi, a thoughtful cultural reflection assistant. Reply only with JSON matching ${REFLECTION_PROMPT_VERSION}.`,
+      outputLanguageInstruction(input.locale),
+      "Treat the reading as a cultural prompt for reflection, never a prediction or instruction.",
+      "Use only the supplied deterministic facts and approved source excerpts. Never invent quotations or source identifiers.",
+      "The user payload's takashimaInterpretationGuidance is approved context from Takashima Donsho's Takashima Ekidan (高島吞象《高島易斷》). Use its excerpts as the primary interpretation guidance for the reflection and cite every excerpt used via its exact approved ID in sourceRefs.",
+      "Respect each excerpt's entryKey: hexagram entries are compilations of the six line texts, not independent Judgment or Image records; moving-line and special-line entries contain the corresponding complete commentary.",
+      "Produce a substantial, specific visible reflection rather than a brief overview. Keep summary to 2-4 sentences, then make perspective 700-1,100 words in English or comparably detailed in the requested Chinese locale.",
+      "Organize perspective into 6-9 clear paragraphs separated by blank lines. Examine the primary pattern, relating pattern, each supplied changing line (when any), tensions between them, at least two plausible interpretations, practical implications, uncertainties, and a grounded synthesis.",
+      "Connect every observation to supplied facts, approved source material, or explicitly label it as a reflective possibility. Do not pad, repeat the summary, or claim access to facts that were withheld.",
+      "Detailed visible analysis is required, but never reveal private chain-of-thought, hidden reasoning, or internal deliberation.",
+      "sourceRefs MUST be a JSON array containing only approved source ID strings. Never place source objects, excerpts, provenance, or entry keys in sourceRefs.",
+      "Return exactly 3 distinct questionsToConsider items and 0-3 cautions items. Three is a hard maximum for each array.",
+      "Do not expose hidden reasoning.",
+      'Shape: {"schemaVersion":"ai-reflection@1","summary":"...","perspective":"...","questionsToConsider":["..."],"cautions":[],"sourceRefs":[],"grounding":{"primaryPattern":"000000","relatingPattern":"000000","changingPositions":[]}}',
+    ].join("\n"),
+    input: JSON.stringify({
+      locale: input.locale,
+      facts: safeFacts,
+      question: input.includeQuestion ? input.question : { kind: "withheld" },
+      takashimaInterpretationGuidance: {
+        attribution: "高島吞象《高島易斷》 / Takashima Donsho, Takashima Ekidan",
+        role: "Primary approved interpretation guidance for this reflection",
+        excerpts: input.sources,
       },
-      {
-        role: "user",
-        content: JSON.stringify({
-          locale: input.locale,
-          facts: safeFacts,
-          question: input.includeQuestion ? input.question : { kind: "withheld" },
-          takashimaInterpretationGuidance: {
-            attribution: "高島吞象《高島易斷》 / Takashima Donsho, Takashima Ekidan",
-            role: "Primary approved interpretation guidance for this reflection",
-            excerpts: input.sources,
-          },
-        }),
-      },
-    ],
+    }),
   };
 }
 
@@ -218,8 +216,25 @@ function deterministicCopy(facts: CastFacts, locale: Locale, reason: string): Ai
 export interface ReflectionResult {
   reflection: AiReflection;
   fallbackReason: string | null;
-  usage: { inputTokens: number; outputTokens: number; totalTokens: number; spendMicros: number };
+  usage: { inputTokens: number; cachedInputTokens: number; outputTokens: number; totalTokens: number; spendMicros: number };
   latencyMs: number;
+}
+
+function deepSeekUsage(inputTokens: number, outputTokens: number, cachedInputTokens: number): ReflectionResult["usage"] {
+  const boundedCachedInputTokens = Math.min(inputTokens, Math.max(0, cachedInputTokens));
+  const cacheMissInputTokens = inputTokens - boundedCachedInputTokens;
+  const spendMicros = Math.ceil((
+    boundedCachedInputTokens * INPUT_CACHE_HIT_MICROS_PER_MILLION
+    + cacheMissInputTokens * INPUT_CACHE_MISS_MICROS_PER_MILLION
+    + outputTokens * OUTPUT_MICROS_PER_MILLION
+  ) / 1_000_000);
+  return {
+    inputTokens,
+    cachedInputTokens: boundedCachedInputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    spendMicros,
+  };
 }
 
 export async function createReflection(env: Env, input: {
@@ -235,7 +250,7 @@ export async function createReflection(env: Env, input: {
   const fallback = (reason: string): ReflectionResult => ({
     reflection: deterministicCopy(input.facts, input.locale, reason),
     fallbackReason: reason,
-    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, spendMicros: 0 },
+    usage: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, totalTokens: 0, spendMicros: 0 },
     latencyMs: Date.now() - startedAt,
   });
   if (input.safetyRouted) return fallback("safety-routed");
@@ -248,8 +263,8 @@ export async function createReflection(env: Env, input: {
   const request = buildDeepSeekRequest(input);
   try {
     const client = new OpenAI({ apiKey: env.DEEPSEEK_API_KEY, baseURL: "https://api.deepseek.com", timeout: 20_000, maxRetries: 0 });
-    const response = await client.chat.completions.create(request as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming);
-    const content = response.choices[0]?.message.content;
+    const response = await client.responses.create(request as OpenAI.Responses.ResponseCreateParamsNonStreaming);
+    const content = response.output_text;
     if (!content) return fallback("provider-empty");
     const parsed = reflectionSchema.parse(normalizeProviderReflection(JSON.parse(content)));
     const allowedSourceIds = new Set(input.sources.map((source) => source.id));
@@ -259,13 +274,13 @@ export async function createReflection(env: Env, input: {
       JSON.stringify(parsed.grounding.changingPositions) !== JSON.stringify(input.facts.cast.changingPositions)) {
       return fallback("grounding-mismatch");
     }
-    const inputTokens = response.usage?.prompt_tokens ?? 0;
-    const outputTokens = response.usage?.completion_tokens ?? 0;
-    const spendMicros = Math.ceil((inputTokens * 140_000 + outputTokens * 280_000) / 1_000_000);
+    const inputTokens = response.usage?.input_tokens ?? 0;
+    const outputTokens = response.usage?.output_tokens ?? 0;
+    const cachedInputTokens = response.usage?.input_tokens_details?.cached_tokens ?? 0;
     return {
       reflection: parsed,
       fallbackReason: null,
-      usage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens, spendMicros },
+      usage: deepSeekUsage(inputTokens, outputTokens, cachedInputTokens),
       latencyMs: Date.now() - startedAt,
     };
   } catch {
@@ -288,28 +303,19 @@ export function buildChatDeepSeekRequest(input: {
 }): DeepSeekRequestBody {
   return {
     model: DEEPSEEK_MODEL,
-    reasoning_effort: "high",
-    thinking: { type: "enabled" },
-    max_tokens: 900,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content: [
-          "You are Yi, a restrained cultural reflection assistant.",
-          outputLanguageInstruction(input.context.locale),
-          "Use only the immutable reading context and approved sources. Do not predict, prescribe, diagnose, or expose hidden reasoning.",
-          "sourceRefs MUST contain approved source ID strings only, never source objects or excerpts.",
-          "Reply as JSON: {\"reply\":\"plain text\",\"sourceRefs\":[\"approved-id\"]}. Never invent source IDs.",
-        ].join("\n"),
-      },
-      {
-        role: "user",
-        content: JSON.stringify({
-          immutableContext: input.context,
-          conversation: input.messages.slice(-20),
-        }),
-      },
+    reasoning: { effort: "high" },
+    max_output_tokens: 900,
+    text: { format: { type: "json_object" } },
+    instructions: [
+      "You are Yi, a restrained cultural reflection assistant.",
+      outputLanguageInstruction(input.context.locale),
+      "Use only the immutable reading context and approved sources. Do not predict, prescribe, diagnose, or expose hidden reasoning.",
+      "sourceRefs MUST contain approved source ID strings only, never source objects or excerpts.",
+      "Reply as JSON: {\"reply\":\"plain text\",\"sourceRefs\":[\"approved-id\"]}. Never invent source IDs.",
+    ].join("\n"),
+    input: [
+      { role: "user", content: JSON.stringify({ immutableContext: input.context }) },
+      ...input.messages.slice(-20),
     ],
   };
 }
@@ -327,7 +333,7 @@ export async function createChatReply(env: Env, input: {
         ? `我可以陪你梳理卦象事实，不过经审核、基于来源的 AI 服务目前不可用（${reason}）。今天有哪些部分，是你可以掌控的？`
         : `我可以陪你梳理卦象事實，不過經審核、以來源為依據的 AI 服務目前不可用（${reason}）。今天有哪些部分，是你可以掌控的？`,
     fallbackReason: reason,
-    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, spendMicros: 0 },
+    usage: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, totalTokens: 0, spendMicros: 0 },
     latencyMs: Date.now() - startedAt,
   });
   if (input.context.safetyRouted) return fallback("safety-routed");
@@ -338,22 +344,18 @@ export async function createChatReply(env: Env, input: {
   const request = buildChatDeepSeekRequest(input);
   try {
     const client = new OpenAI({ apiKey: env.DEEPSEEK_API_KEY, baseURL: "https://api.deepseek.com", timeout: 20_000, maxRetries: 0 });
-    const response = await client.chat.completions.create(request as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming);
+    const response = await client.responses.create(request as OpenAI.Responses.ResponseCreateParamsNonStreaming);
     const parsed = z.object({ reply: z.string().min(1).max(4_000), sourceRefs: z.array(z.string()).max(24) }).strict()
-      .parse(JSON.parse(response.choices[0]?.message.content ?? ""));
+      .parse(JSON.parse(response.output_text));
     const allowed = new Set(input.context.sources.map((source) => source.id));
     if (parsed.sourceRefs.some((id) => !allowed.has(id))) return fallback("fabricated-source");
-    const inputTokens = response.usage?.prompt_tokens ?? 0;
-    const outputTokens = response.usage?.completion_tokens ?? 0;
+    const inputTokens = response.usage?.input_tokens ?? 0;
+    const outputTokens = response.usage?.output_tokens ?? 0;
+    const cachedInputTokens = response.usage?.input_tokens_details?.cached_tokens ?? 0;
     return {
       content: parsed.reply,
       fallbackReason: null,
-      usage: {
-        inputTokens,
-        outputTokens,
-        totalTokens: inputTokens + outputTokens,
-        spendMicros: Math.ceil((inputTokens * 140_000 + outputTokens * 280_000) / 1_000_000),
-      },
+      usage: deepSeekUsage(inputTokens, outputTokens, cachedInputTokens),
       latencyMs: Date.now() - startedAt,
     };
   } catch {

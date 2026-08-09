@@ -28,6 +28,30 @@ function env(): Env {
   return { CATALOG_REVIEWED: "true", AI_ENABLED: "true", DEEPSEEK_API_KEY: "test-key" } as Env;
 }
 
+function providerResponse(content: unknown, cachedTokens = 0) {
+  return new Response(JSON.stringify({
+    id: "resp-test",
+    object: "response",
+    created_at: 1,
+    status: "completed",
+    model: "deepseek-v4-flash",
+    output: [{
+      id: "msg-test",
+      type: "message",
+      status: "completed",
+      role: "assistant",
+      content: [{ type: "output_text", text: JSON.stringify(content), annotations: [] }],
+    }],
+    usage: {
+      input_tokens: 10,
+      input_tokens_details: { cached_tokens: cachedTokens },
+      output_tokens: 20,
+      output_tokens_details: { reasoning_tokens: 5 },
+      total_tokens: 30,
+    },
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+}
+
 afterEach(() => vi.restoreAllMocks());
 
 describe("DeepSeek adapter", () => {
@@ -37,27 +61,27 @@ describe("DeepSeek adapter", () => {
     expect(large.estimatedTokens).toBeGreaterThan(small.estimatedTokens + 9_000);
     expect(large.estimatedSpendMicros).toBeGreaterThan(small.estimatedSpendMicros);
   });
-  it("builds the exact bounded thinking request without temperature", () => {
+  it("builds the exact bounded Responses API request without temperature", () => {
     const body = buildDeepSeekRequest({ facts, question: { kind: "question", text: "What can I clarify?" }, locale: "en", includeQuestion: false, sources: [source] });
     expect(body).toMatchObject({
       model: "deepseek-v4-flash",
-      reasoning_effort: "high",
-      thinking: { type: "enabled" },
-      max_tokens: REFLECTION_MAX_OUTPUT_TOKENS,
-      response_format: { type: "json_object" },
+      reasoning: { effort: "high" },
+      max_output_tokens: REFLECTION_MAX_OUTPUT_TOKENS,
+      text: { format: { type: "json_object" } },
     });
     expect(body).not.toHaveProperty("temperature");
-    const context = JSON.parse(body.messages[1]!.content);
+    expect(body).not.toHaveProperty("messages");
+    const context = JSON.parse(body.input as string);
     expect(context.question).toEqual({ kind: "withheld" });
     expect(context.takashimaInterpretationGuidance).toMatchObject({
       attribution: "高島吞象《高島易斷》 / Takashima Donsho, Takashima Ekidan",
       role: "Primary approved interpretation guidance for this reflection",
       excerpts: [{ id: source.id, entryKey: source.entryKey, text: source.text }],
     });
-    expect(body.messages[0]!.content).toContain("primary interpretation guidance");
-    expect(body.messages[0]!.content).toContain("hexagram entries are compilations");
-    expect(body.messages[0]!.content).toContain("700-1,100 words");
-    expect(body.messages[0]!.content).toContain("6-9 clear paragraphs");
+    expect(body.instructions).toContain("primary interpretation guidance");
+    expect(body.instructions).toContain("hexagram entries are compilations");
+    expect(body.instructions).toContain("700-1,100 words");
+    expect(body.instructions).toContain("6-9 clear paragraphs");
   });
 
   it.each([
@@ -66,8 +90,8 @@ describe("DeepSeek adapter", () => {
     ["en", "English"],
   ] as const)("requires reflection output in the current %s language", (locale, language) => {
     const body = buildDeepSeekRequest({ facts, question: { kind: "none" }, locale, includeQuestion: false, sources: [source] });
-    expect(body.messages[0]!.content).toContain(`Output language: ${language}.`);
-    expect(body.messages[0]!.content).toContain("Use this language for every user-visible string");
+    expect(body.instructions).toContain(`Output language: ${language}.`);
+    expect(body.instructions).toContain("Use this language for every user-visible string");
   });
 
   it.each([
@@ -79,8 +103,24 @@ describe("DeepSeek adapter", () => {
       context: { facts, reflection: null, question: { kind: "withheld" }, sources: [source], locale, safetyRouted: false },
       messages: [{ role: "user", content: "Please continue." }],
     });
-    expect(body.messages[0]!.content).toContain(`Output language: ${language}.`);
-    expect(body.messages[0]!.content).toContain("regardless of the language used in source excerpts or earlier conversation messages");
+    expect(body.instructions).toContain(`Output language: ${language}.`);
+    expect(body.instructions).toContain("regardless of the language used in source excerpts or earlier conversation messages");
+  });
+
+  it("keeps chat turns as a stable input prefix for DeepSeek's automatic context cache", () => {
+    const context = { facts, reflection: null, question: { kind: "withheld" } as const, sources: [source], locale: "en" as const, safetyRouted: false };
+    const first = buildChatDeepSeekRequest({ context, messages: [{ role: "user", content: "First turn" }] });
+    const second = buildChatDeepSeekRequest({
+      context,
+      messages: [
+        { role: "user", content: "First turn" },
+        { role: "assistant", content: "First reply" },
+        { role: "user", content: "Second turn" },
+      ],
+    });
+    expect(Array.isArray(first.input)).toBe(true);
+    expect((second.input as unknown[]).slice(0, (first.input as unknown[]).length)).toEqual(first.input);
+    expect(second).not.toHaveProperty("previous_response_id");
   });
 
   it("accepts the expanded detailed perspective size", () => {
@@ -111,22 +151,15 @@ describe("DeepSeek adapter", () => {
   });
 
   it("rejects a fabricated source reference and exposes no reasoning", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
-      id: "chatcmpl-test",
-      object: "chat.completion",
-      created: 1,
-      model: "deepseek-v4-flash",
-      choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: JSON.stringify({
-        schemaVersion: "ai-reflection@1",
-        summary: "A summary",
-        perspective: "A perspective",
-        questionsToConsider: ["A question?"],
-        cautions: [],
-        sourceRefs: ["fabricated"],
-        grounding: { primaryPattern: facts.primary.pattern, relatingPattern: facts.relating.pattern, changingPositions: facts.cast.changingPositions },
-      }) } }],
-      usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
-    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse({
+      schemaVersion: "ai-reflection@1",
+      summary: "A summary",
+      perspective: "A perspective",
+      questionsToConsider: ["A question?"],
+      cautions: [],
+      sourceRefs: ["fabricated"],
+      grounding: { primaryPattern: facts.primary.pattern, relatingPattern: facts.relating.pattern, changingPositions: facts.cast.changingPositions },
+    }));
     const result = await createReflection(env(), {
       facts,
       question: { kind: "none" },
@@ -141,22 +174,15 @@ describe("DeepSeek adapter", () => {
   });
 
   it("bounds excess provider questions and cautions before strict validation", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
-      id: "chatcmpl-bounded",
-      object: "chat.completion",
-      created: 1,
-      model: "deepseek-v4-flash",
-      choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: JSON.stringify({
-        schemaVersion: "ai-reflection@1",
-        summary: "A summary",
-        perspective: "A perspective",
-        questionsToConsider: ["One?", "Two?", "Three?", "Four?"],
-        cautions: ["One.", "Two.", "Three.", "Four."],
-        sourceRefs: [source.id],
-        grounding: { primaryPattern: facts.primary.pattern, relatingPattern: facts.relating.pattern, changingPositions: facts.cast.changingPositions },
-      }) } }],
-      usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
-    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse({
+      schemaVersion: "ai-reflection@1",
+      summary: "A summary",
+      perspective: "A perspective",
+      questionsToConsider: ["One?", "Two?", "Three?", "Four?"],
+      cautions: ["One.", "Two.", "Three.", "Four."],
+      sourceRefs: [source.id],
+      grounding: { primaryPattern: facts.primary.pattern, relatingPattern: facts.relating.pattern, changingPositions: facts.cast.changingPositions },
+    }, 10));
     const result = await createReflection(env(), {
       facts,
       question: { kind: "none" },
@@ -169,5 +195,11 @@ describe("DeepSeek adapter", () => {
     expect(result.fallbackReason).toBeNull();
     expect(result.reflection.questionsToConsider).toHaveLength(3);
     expect(result.reflection.cautions).toHaveLength(3);
+    expect(result.usage.cachedInputTokens).toBe(10);
+    expect(result.usage.spendMicros).toBe(6);
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain("/responses");
+    const request = JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body));
+    expect(request).toMatchObject({ model: "deepseek-v4-flash", reasoning: { effort: "high" } });
+    expect(request).not.toHaveProperty("messages");
   });
 });
