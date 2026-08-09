@@ -18,12 +18,13 @@ function paragraphs(value: string): string[] {
 export function ReflectionArticle({ reflection }: { reflection: ReflectionArticleData }) {
   const { t } = useTranslation();
   const titleId = useId();
+  const longSummary = Array.from(reflection.summary.trim()).length > 72;
   const perspective = paragraphs(reflection.perspective);
   const questions = reflection.questionsToConsider ?? [];
   const cautions = reflection.cautions ?? [];
 
   return <article className="reflection-article" aria-labelledby={titleId}>
-    <header className="reflection-summary">
+    <header className={`reflection-summary${longSummary ? " long" : ""}`}>
       <h3 id={titleId}>{reflection.summary}</h3>
     </header>
     <div className="reflection-perspective">

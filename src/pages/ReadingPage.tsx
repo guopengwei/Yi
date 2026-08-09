@@ -11,6 +11,7 @@ import { Turnstile } from "../components/Turnstile";
 import { api, postJson } from "../lib/api";
 import { useSession } from "../lib/session";
 import { hexagramName } from "../lib/hexagram-name";
+import { parseTakashimaText } from "../lib/takashima-text";
 
 interface Reflection extends ReflectionArticleData { questionsToConsider: string[]; cautions: string[] }
 interface TakashimaInterpretation {
@@ -168,7 +169,7 @@ export function ReadingPage() {
       </div>
     </section>}
     <section className="reflection-section">
-      <header className="reflection-heading"><p className="eyebrow">Optional / DeepSeek</p><h2>{t("result.reflection")}</h2></header>
+      <header className="reflection-heading"><p className="eyebrow">By DeepSeek</p><h2>{t("result.reflection")}</h2></header>
       <div className="reflection-content">{reading.reflection ? <ReflectionArticle reflection={reading.reflection} />
         : !consentOpen ? <button className="button primary" disabled={busy} onClick={() => reading.aiConsentScope ? void reflection(reading.aiConsentScope) : setConsentOpen(true)}>{busy ? t("common.loading") : t(reading.aiConsentScope ? "consent.create" : "result.askReflection")}</button>
           : <ConsentCard agreed={agreed} onAgreementChange={setAgreed} onCancel={() => setConsentOpen(false)} onSubmit={() => void reflection()} submitLabel={busy ? t("common.loading") : t("consent.submit")} disabled={busy || (!session && !turnstile)}>{!session && <Turnstile action="guest_ai" onToken={setTurnstile} resetKey={turnstileReset} />}</ConsentCard>}
@@ -206,30 +207,14 @@ function ConsentCard({ agreed, onAgreementChange, onCancel, onSubmit, submitLabe
   </section>;
 }
 
-type TakashimaTextBlock =
-  | { kind: "heading"; text: string }
-  | { kind: "paragraph"; text: string }
-  | { kind: "list"; items: string[] };
-
 function TakashimaSourceText({ text }: { text: string }) {
-  const blocks: TakashimaTextBlock[] = [];
-  let listItems: string[] = [];
-  const flushList = () => {
-    if (listItems.length > 0) blocks.push({ kind: "list", items: listItems });
-    listItems = [];
-  };
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) { flushList(); continue; }
-    const heading = line.match(/^#{1,6}\s+(.+)$/);
-    const listItem = line.match(/^[*+-]\s+(.+)$/);
-    if (listItem) { listItems.push(listItem[1]!.trim()); continue; }
-    flushList();
-    blocks.push(heading ? { kind: "heading", text: heading[1]!.trim() } : { kind: "paragraph", text: line });
-  }
-  flushList();
+  const blocks = parseTakashimaText(text);
   return <div className="takashima-source-text">{blocks.map((block, index) => block.kind === "heading"
     ? <h4 key={index}>{block.text}</h4>
     : block.kind === "paragraph" ? <p key={index}>{block.text}</p>
-      : <ul key={index}>{block.items.map((item) => <li key={item}>{item}</li>)}</ul>)}</div>;
+      : block.kind === "list" ? <ul key={index}>{block.items.map((item) => <li key={item}>{item}</li>)}</ul>
+        : <dl className="takashima-guidance" key={index}>{block.items.map((item, itemIndex) => <div key={`${item.label}-${itemIndex}`}>
+          <dt>{item.label}</dt>
+          <dd>{item.text}</dd>
+        </div>)}</dl>)}</div>;
 }
