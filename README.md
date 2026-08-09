@@ -1,6 +1,6 @@
 # Yi · 易
 
-Yi is a trilingual, responsive reflection application for `yi.rich-tide.com`. It combines a deterministic, single-changing-line casting method with directly mapped Takashima interpretations, voluntary HKD contributions, explicit-consent DeepSeek reflections, private archives and notes, persistent reading chats, anonymous seven-day shares, and a content-redacted operations console.
+Yi is a trilingual, responsive reflection application for `yi.rich-tide.com`. It combines a deterministic, single-changing-line casting method with directly mapped Takashima interpretations, voluntary HKD contributions, explicit-consent DeepSeek interpretations, private archives and notes, persistent reading chats, anonymous seven-day shares, and a content-redacted operations console.
 
 The application is greenfield. `ReferenceProg/` is ignored and is neither imported nor deployed. The deterministic King Wen identifiers and mappings live in [`shared/catalog.ts`](shared/catalog.ts). Approved Takashima excerpts are snapshotted in Traditional Chinese, Simplified Chinese and English, then selected by request locale without an LLM call.
 

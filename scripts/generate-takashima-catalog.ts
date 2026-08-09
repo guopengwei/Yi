@@ -188,7 +188,7 @@ async function main() {
       locale: input.locale,
       text: input.text,
       provenance: {
-        title: `${localeNames[input.locale]} — project-owner-approved repository dataset`,
+        title: localeNames[input.locale],
         publication: sourceFileLabel,
         locator: input.locator,
       },

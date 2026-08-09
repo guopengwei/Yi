@@ -19,7 +19,7 @@ routes.post("/", async (c) => {
   `).bind(body.archiveId, session.user.id).first<{ facts_json: string; reflection_json: string | null; reflection_included_question: number }>();
   if (!archive) throw new ApiError("ARCHIVE_NOT_FOUND", 404, "Saved reading not found.");
   if (body.includeReflection && archive.reflection_included_question === 1) {
-    throw new ApiError("REFLECTION_NOT_SHAREABLE", 409, "This reflection used your private question and cannot be included in an anonymous share.");
+    throw new ApiError("REFLECTION_NOT_SHAREABLE", 409, "This AI interpretation used your private question and cannot be included in an anonymous share.");
   }
   const token = randomToken(32);
   const id = crypto.randomUUID();
