@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const castingMethodSchema = z.enum(["three-number@1", "three-coin@1", "secure-random@1"]);
+export const castingMethodSchema = z.literal("three-number@1");
 export type CastingMethod = z.infer<typeof castingMethodSchema>;
 
 export const questionSchema = z.discriminatedUnion("kind", [
@@ -15,51 +15,14 @@ const threeNumberInputs = z.object({
   changingPosition: z.number().int().min(1).max(6),
 }).strict();
 
-const coinFace = z.enum(["heads", "tails"]);
-const coinThrow = z.tuple([coinFace, coinFace, coinFace]);
-const threeCoinInputs = z.object({
-  throws: z.tuple([coinThrow, coinThrow, coinThrow, coinThrow, coinThrow, coinThrow]),
+export const readingCreateSchema = z.object({
+  schemaVersion: z.literal("reading-create@1"),
+  clientRequestId: z.string().uuid(),
+  castingMethod: castingMethodSchema,
+  inputs: threeNumberInputs,
+  question: questionSchema,
+  timezone: z.string().min(1).max(64),
 }).strict();
-
-const secureRandomInputs = z.object({
-  lineValues: z.tuple([
-    z.union([z.literal(6), z.literal(7), z.literal(8), z.literal(9)]),
-    z.union([z.literal(6), z.literal(7), z.literal(8), z.literal(9)]),
-    z.union([z.literal(6), z.literal(7), z.literal(8), z.literal(9)]),
-    z.union([z.literal(6), z.literal(7), z.literal(8), z.literal(9)]),
-    z.union([z.literal(6), z.literal(7), z.literal(8), z.literal(9)]),
-    z.union([z.literal(6), z.literal(7), z.literal(8), z.literal(9)]),
-  ]),
-  entropyCommitment: z.string().regex(/^random-v1:[A-Za-z0-9_-]{22,128}$/),
-  reviewed: z.literal(true),
-}).strict();
-
-export const readingCreateSchema = z.discriminatedUnion("castingMethod", [
-  z.object({
-    schemaVersion: z.literal("reading-create@1"),
-    clientRequestId: z.string().uuid(),
-    castingMethod: z.literal("three-number@1"),
-    inputs: threeNumberInputs,
-    question: questionSchema,
-    timezone: z.string().min(1).max(64),
-  }).strict(),
-  z.object({
-    schemaVersion: z.literal("reading-create@1"),
-    clientRequestId: z.string().uuid(),
-    castingMethod: z.literal("three-coin@1"),
-    inputs: threeCoinInputs,
-    question: questionSchema,
-    timezone: z.string().min(1).max(64),
-  }).strict(),
-  z.object({
-    schemaVersion: z.literal("reading-create@1"),
-    clientRequestId: z.string().uuid(),
-    castingMethod: z.literal("secure-random@1"),
-    inputs: secureRandomInputs,
-    question: questionSchema,
-    timezone: z.string().min(1).max(64),
-  }).strict(),
-]);
 export type ReadingCreate = z.infer<typeof readingCreateSchema>;
 
 export const localeSchema = z.enum(["zh-HK", "zh-CN", "en"]);

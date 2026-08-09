@@ -78,7 +78,7 @@ CREATE TABLE reading_operations (
   user_id TEXT REFERENCES "user"(id) ON DELETE CASCADE,
   guest_id_hash TEXT,
   request_fingerprint TEXT NOT NULL,
-  casting_method TEXT NOT NULL CHECK (casting_method IN ('three-number@1', 'three-coin@1', 'secure-random@1')),
+  casting_method TEXT NOT NULL CHECK (casting_method = 'three-number@1'),
   question_text TEXT,
   question_kind TEXT NOT NULL CHECK (question_kind IN ('none', 'question')),
   timezone TEXT NOT NULL,

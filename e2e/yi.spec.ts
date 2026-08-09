@@ -105,7 +105,7 @@ test("completes a reviewed three-number cast with HK$0", async ({ page }) => {
   await page.goto("/");
   await beginCast(page);
   await page.getByLabel("Your question").fill("What is one reversible next step?");
-  await page.getByRole("button", { name: "Choose a casting method" }).click();
+  await page.getByRole("button", { name: "Enter casting numbers" }).click();
   await page.getByLabel("Upper trigram (1-8)").fill("1");
   await page.getByLabel("Lower trigram (1-8)").fill("8");
   await expect(page.getByText("Qian · Heaven")).toBeVisible();
@@ -125,21 +125,18 @@ test("completes a reviewed three-number cast with HK$0", async ({ page }) => {
   await expect(page.getByText("Source catalog under review", { exact: true })).toBeVisible();
 });
 
-test("expands explanations for all three casting methods", async ({ page }) => {
+test("explains why three-number casting is used", async ({ page }) => {
   await useLocale(page, "en");
   await page.goto("/");
   await beginCast(page);
   await page.getByLabel("Your question").fill("How should I understand the methods?");
-  await page.getByRole("button", { name: "Choose a casting method" }).click();
+  await page.getByRole("button", { name: "Enter casting numbers" }).click();
 
   await page.getByText("How does this method work?").click();
   await expect(page.getByText("This method always has exactly one changing line.")).toBeVisible();
-
-  await page.getByRole("tab", { name: "Three coins" }).click();
-  await expect(page.getByText("A total of 6 is changing yin")).toBeVisible();
-
-  await page.getByRole("tab", { name: "Secure random" }).click();
-  await expect(page.getByText("White lines are stable; orange lines are changing.")).toBeVisible();
+  await expect(page.getByRole("tab")).toHaveCount(0);
+  await expect(page.getByText("Three coins", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Secure random", { exact: true })).toHaveCount(0);
 });
 
 test("has no serious accessibility violations on the primary landing view", async ({ page }) => {
@@ -174,6 +171,68 @@ test("introduces Kaemon Takashima on the About and help page", async ({ page }) 
   await expect(page.getByRole("heading", { name: "Kaemon Takashima" })).toBeVisible();
   await expect(page.getByText("Kaemon Takashima (1832–1914)")).toBeVisible();
   await expect(page.getByRole("link", { name: /Read the Japanese Wikipedia article/ })).toHaveAttribute("href", "https://ja.wikipedia.org/wiki/%E9%AB%98%E5%B3%B6%E5%98%89%E5%8F%B3%E8%A1%9B%E9%96%80");
+});
+
+test("shows the mapped Takashima interpretation without requesting AI", async ({ page }) => {
+  await useLocale(page, "en");
+  const readingId = "f34ed3f8-90d9-4e0f-996b-d649db367f2e";
+  const facts = { ...sampleFacts(), sourceStatus: "reviewed", systemStatus: "source-grounded-enabled" };
+  let reflectionRequests = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith(`/api/v1/readings/${readingId}/reflection`)) reflectionRequests += 1;
+  });
+  await page.route(`**/api/v1/readings/${readingId}`, (route) => {
+    const locale = (route.request().headers()["x-yi-locale"] ?? "zh-HK") as "zh-HK" | "zh-CN" | "en";
+    const localized = {
+      "zh-HK": {
+        text: "初九：拔茅茹，以其彙，貞吉亨。\n#### 爻辭的多重解讀\n* 經營：共同志向可以聚合人才與資源。",
+        title: "《高島易斷》經審核目錄",
+        locator: "否卦／初九",
+      },
+      "zh-CN": {
+        text: "初九：拔茅茹，以其汇，贞吉亨。\n#### 爻辞的多重解读\n* 经营：共同志向可以聚合人才与资源。",
+        title: "《高岛易断》经审核目录",
+        locator: "否卦／初九",
+      },
+      en: {
+        text: "Initial Nine: pull up the joined grass roots; advancing is auspicious.\n#### Multiple interpretations of the line\n* Business: Shared purpose can draw people and resources together.",
+        title: "Takashima Ekidan — reviewed catalog",
+        locator: "Pi / Initial Nine",
+      },
+    }[locale];
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+      id: readingId,
+      status: "ready",
+      contributionAmountHkd: 0,
+      createdAt: "2026-08-08T00:00:00.000Z",
+      facts,
+      takashimaInterpretations: [{
+        id: `takashima-test:${locale}:line:kw-12:1`,
+        entryKey: `line:${facts.primary.id}:1`,
+        text: localized.text,
+        provenance: { title: localized.title, locator: localized.locator },
+      }],
+      reflection: null,
+      reflectionShareEligible: false,
+      safety: { routed: false, limitations: [] },
+    }),
+    });
+  });
+
+  await page.goto(`/reading/${readingId}`);
+  await expect(page.getByRole("heading", { name: "Takashima’s interpretation" })).toBeVisible();
+  await expect(page.getByText("Displaying it does not call an AI model.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Multiple interpretations of the line" })).toBeVisible();
+  await expect(page.getByRole("listitem")).toContainText("Shared purpose can draw people and resources together.");
+  await expect(page.getByText(/Takashima Ekidan — reviewed catalog · Pi \/ Initial Nine/)).toBeVisible();
+  await selectLocale(page, "zh-CN");
+  await expect(page.getByRole("heading", { name: "《高岛易断》解读" })).toBeVisible();
+  await expect(page.getByText("初九：拔茅茹，以其汇，贞吉亨。")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "爻辞的多重解读" })).toBeVisible();
+  expect(reflectionRequests).toBe(0);
 });
 
 test("completes the password-reset landing flow and hides unavailable social providers", async ({ page }) => {
@@ -348,7 +407,7 @@ test("enters, exits, and resumes the four-step mobile casting flow", async ({ pa
   await expect(page.getByText("Step 1 of 4")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Mobile navigation" })).toBeHidden();
   await page.getByLabel("Your question").fill("What deserves a smaller next step?");
-  await page.getByRole("button", { name: "Choose a casting method" }).click();
+  await page.getByRole("button", { name: "Enter casting numbers" }).click();
   await expect(page.getByText("Step 2 of 4")).toBeVisible();
   await page.getByRole("button", { name: "Exit casting" }).click();
   await expect(page.getByRole("heading", { name: /Place the question/ })).toBeVisible();
@@ -418,7 +477,7 @@ test("captures mobile casting method and review visuals", async ({ page }, testI
   await page.goto("/");
   await beginCast(page);
   await page.getByLabel("Your question").fill("What is one reversible next step?");
-  await page.getByRole("button", { name: "Choose a casting method" }).click();
+  await page.getByRole("button", { name: "Enter casting numbers" }).click();
   await expect(page.locator(".method-lede")).toBeVisible();
   await expect(page.locator(".method-lede")).toContainText("Enter upper and lower trigrams");
   await expect(page).toHaveScreenshot("mobile-casting-method.png", { animations: "disabled", maxDiffPixelRatio: 0.02 });

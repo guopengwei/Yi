@@ -62,10 +62,11 @@ describe("Worker reading lifecycle", () => {
     expect(await complete.json()).toMatchObject({ status: "ready", readingId: operation.id });
 
     const result = await SELF.fetch(`https://example.test/api/v1/readings/${operation.id}`, { headers: { Cookie: cookie! } });
-    const ready = await result.json<{ status: string; facts: { primary: { pattern: string }; cast: { changingPositions: number[] } } }>();
+    const ready = await result.json<{ status: string; facts: { primary: { pattern: string }; cast: { changingPositions: number[] } }; takashimaInterpretations: unknown[] }>();
     expect(ready.status).toBe("ready");
     expect(ready.facts.primary.pattern).toBe("000111");
     expect(ready.facts.cast.changingPositions).toEqual([1]);
+    expect(ready.takashimaInterpretations).toEqual([]);
 
     const duplicateComplete = await SELF.fetch(`https://example.test/api/v1/readings/${operation.id}/contribution`, {
       method: "POST",
@@ -152,6 +153,17 @@ describe("Email/password account lifecycle", () => {
 });
 
 describe("D1 schema contracts", () => {
+  it("rejects retired casting methods at the storage boundary", async () => {
+    const now = Date.now();
+    await expect(env.DB.prepare(`
+      INSERT INTO reading_operations(
+        id, client_request_id, identity_key, request_fingerprint, casting_method,
+        question_kind, timezone, facts_json, safety_json, status, created_at, updated_at
+      ) VALUES (?, ?, ?, 'fingerprint', 'three-coin@1', 'none', 'UTC', '{}', '{}', 'ready', ?, ?)
+    `).bind(crypto.randomUUID(), crypto.randomUUID(), `guest:${crypto.randomUUID()}`, now, now).run())
+      .rejects.toThrow("Only three-number@1 casting is supported");
+  });
+
   it("indexes archive titles, questions, facts, reflections and notes without cross-owner matches", async () => {
     const now = Date.now();
     await env.DB.batch([

@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { IDENTIFIER_CATALOG } from "../shared/catalog";
+import { englishTranslationIssue } from "./catalog-language-quality";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const catalogDir = resolve(root, "catalog");
@@ -78,6 +79,10 @@ export async function validateCatalog(options: { production: boolean }): Promise
     const localeKey = `${entry.locale}:${entry.entryKey}`;
     if (seenKeys.has(localeKey)) throw new Error(`Duplicate catalog locale/key: ${localeKey}`);
     if (seenIds.has(entry.id)) throw new Error(`Duplicate catalog source id: ${entry.id}`);
+    if (entry.locale === "en") {
+      const issue = englishTranslationIssue(entry.text);
+      if (issue) throw new Error(`Invalid English translation ${entry.entryKey}: ${issue}.`);
+    }
     seenKeys.add(localeKey);
     seenIds.add(entry.id);
   }

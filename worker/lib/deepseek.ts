@@ -84,7 +84,10 @@ export type SourceExcerpt = z.infer<typeof sourceExcerptSchema>;
 export function parseSourceSnapshot(json: string | null, included: boolean): SourceExcerpt[] {
   if (!json || !included) return [];
   try {
-    const parsed = z.array(sourceExcerptSchema).max(10).safeParse(JSON.parse(json));
+    // A reading may carry every required entry in all three supported locales.
+    // The current casting method needs three entries (nine localized records),
+    // while this bound also keeps legacy multi-line snapshots readable.
+    const parsed = z.array(sourceExcerptSchema).max(32).safeParse(JSON.parse(json));
     return parsed.success ? parsed.data : [];
   } catch {
     return [];

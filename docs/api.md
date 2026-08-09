@@ -8,6 +8,8 @@ All application endpoints are under `/api/v1`; Better Auth owns `/api/auth/*`. J
 
 Mutation retries that can create money, reading, chat or share state use cryptographic UUID idempotency keys. Ownership is derived from the authenticated session or signed guest cookie—never from a request body user ID.
 
+Localized requests send `X-Yi-Locale: zh-HK | zh-CN | en`. Ready reading responses include only the matching approved Takashima entries. New readings snapshot all three locales; a legacy single-locale reading resolves the requested translation from the same immutable catalog release.
+
 ## Reading lifecycle
 
 `awaiting_contribution → payment_pending → ready`
@@ -24,7 +26,7 @@ Mutation retries that can create money, reading, chat or share state use cryptog
 | --- | --- | --- | --- |
 | GET | `/status` | public | deterministic, catalog and AI feature status |
 | POST | `/readings` | guest/user | create a versioned cast |
-| GET | `/readings/:id` | owner | poll state and reveal ready facts |
+| GET | `/readings/:id` | owner | poll state and reveal ready facts plus the locale-matched Takashima interpretation |
 | POST | `/readings/:id/contribution` | owner | HK$0 completion or Stripe Checkout |
 | POST | `/readings/:id/reflection` | owner + explicit consent | deterministic fallback or source-grounded reflection |
 | POST | `/readings/:id/archive` | user | explicitly save a reading |

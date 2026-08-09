@@ -2,15 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TRIGRAMS } from "../../shared/catalog";
 import type { LineValue } from "../../shared/casting";
-import { createSecureRandomDraft, lineValuesFromReading } from "../../shared/casting";
-import { readingCreateSchema, type CastingMethod, type ReadingCreate } from "../../shared/contracts";
+import { lineValuesFromReading } from "../../shared/casting";
+import { readingCreateSchema, type ReadingCreate } from "../../shared/contracts";
 import { CastingStepHeader, StickyActionBar } from "../components/FlowPrimitives";
 import { ContributionPanel } from "../components/ContributionPanel";
 import { Hexagram } from "../components/Hexagram";
 import { useMobileShell } from "../components/MobileShell";
 import { postJson } from "../lib/api";
 
-type Face = "heads" | "tails" | null;
 type Phase = "question" | "method" | "review" | "contribution";
 
 const phases: Phase[] = ["question", "method", "review", "contribution"];
@@ -23,20 +22,14 @@ export function HomePage() {
   const upperInput = useRef<HTMLInputElement>(null);
   const lowerInput = useRef<HTMLInputElement>(null);
   const changingInput = useRef<HTMLInputElement>(null);
-  const randomButton = useRef<HTMLButtonElement>(null);
-  const coinButtons = useRef<Array<HTMLButtonElement | null>>([]);
   const [started, setStarted] = useState(false);
   const [phase, setPhase] = useState<Phase>("question");
   const [question, setQuestion] = useState("");
   const [noQuestion, setNoQuestion] = useState(false);
-  const [method, setMethod] = useState<CastingMethod>("three-number@1");
   const [numbers, setNumbers] = useState({ upper: "", lower: "", changing: "" });
-  const [throws, setThrows] = useState<Face[][]>(() => Array.from({ length: 6 }, () => [null, null, null]));
-  const [randomDraft, setRandomDraft] = useState<Awaited<ReturnType<typeof createSecureRandomDraft>> | null>(null);
   const [prepared, setPrepared] = useState<ReadingCreate | null>(null);
   const [readingId, setReadingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [randomBusy, setRandomBusy] = useState(false);
   const [error, setError] = useState("");
   const [liveMessage, setLiveMessage] = useState("");
   useMobileShell(started ? "focused" : "normal");
@@ -76,31 +69,28 @@ export function HomePage() {
       question: noQuestion ? { kind: "none" as const } : { kind: "question" as const, text: question.trim() },
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Hong_Kong",
     };
-    const candidate: unknown = method === "three-number@1"
-      ? { ...base, castingMethod: method, inputs: { upperTrigram: Number(numbers.upper), lowerTrigram: Number(numbers.lower), changingPosition: Number(numbers.changing) } }
-      : method === "three-coin@1"
-        ? { ...base, castingMethod: method, inputs: { throws } }
-        : { ...base, castingMethod: method, inputs: randomDraft };
+    const candidate: unknown = {
+      ...base,
+      castingMethod: "three-number@1",
+      inputs: {
+        upperTrigram: Number(numbers.upper),
+        lowerTrigram: Number(numbers.lower),
+        changingPosition: Number(numbers.changing),
+      },
+    };
     const parsed = readingCreateSchema.safeParse(candidate);
     return parsed.success ? parsed.data : null;
   };
   const review = () => {
-    if (method === "three-number@1") {
-      if (!between(numbers.upper, 1, 8)) { focusError(upperInput.current); return; }
-      if (!between(numbers.lower, 1, 8)) { focusError(lowerInput.current); return; }
-      if (!between(numbers.changing, 1, 6)) { focusError(changingInput.current); return; }
-    } else if (method === "three-coin@1") {
-      const firstUnset = throws.flat().findIndex((value) => value === null);
-      if (firstUnset >= 0) { focusError(coinButtons.current[firstUnset] ?? null); return; }
-    } else if (!randomDraft) { focusError(randomButton.current); return; }
+    if (!between(numbers.upper, 1, 8)) { focusError(upperInput.current); return; }
+    if (!between(numbers.lower, 1, 8)) { focusError(lowerInput.current); return; }
+    if (!between(numbers.changing, 1, 6)) { focusError(changingInput.current); return; }
     const request = buildRequest();
-    if (!request) { focusError(method === "secure-random@1" ? randomButton.current : null); return; }
+    if (!request) { focusError(upperInput.current); return; }
     setPrepared(request);
     moveTo("review");
   };
   const lineValues = useMemo(() => prepared ? lineValuesFromReading(prepared) : [], [prepared]);
-  const guideKey = method === "three-number@1" ? "number" : method === "three-coin@1" ? "coin" : "random";
-  const guidePoints = guideKey === "number" ? ["point1", "point2"] : ["point1", "point2", "point3"];
   const submitReading = async () => {
     if (!prepared) return;
     setBusy(true); setError(""); setLiveMessage(t("common.loading"));
@@ -109,15 +99,6 @@ export function HomePage() {
       setReadingId(response.id); moveTo("contribution");
     } catch (reason) { setError(reason instanceof Error ? reason.message : t("common.error")); }
     finally { setBusy(false); }
-  };
-  const setCoin = (line: number, coin: number, face: Exclude<Face, null>) => setThrows((current) => current.map((row, rowIndex) =>
-    rowIndex === line ? row.map((value, coinIndex) => coinIndex === coin ? face : value) : row,
-  ));
-  const generateRandom = async () => {
-    setRandomBusy(true); setError(""); setLiveMessage(t("common.loading"));
-    try { setRandomDraft(await createSecureRandomDraft()); setLiveMessage(t("cast.generated")); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : t("common.error")); }
-    finally { setRandomBusy(false); }
   };
   const goBack = phase === "method" ? () => moveTo("question") : phase === "review" ? () => moveTo("method") : undefined;
 
@@ -157,21 +138,16 @@ export function HomePage() {
       </div>}
 
       {phase === "method" && <div className="method-layout">
-        <div className="method-tabs" role="tablist" aria-label={t("cast.methodTitle")}>
-          {(["three-number@1", "three-coin@1", "secure-random@1"] as CastingMethod[]).map((value, index) => <button id={`method-tab-${index}`} role="tab" aria-controls="method-panel" aria-selected={method === value} tabIndex={method === value ? 0 : -1} key={value} onClick={() => { setMethod(value); setError(""); }}>
-            <span>0{index + 1}</span><strong>{t(value === "three-number@1" ? "cast.number" : value === "three-coin@1" ? "cast.coin" : "cast.random")}</strong>
-          </button>)}
-        </div>
-        <div id="method-panel" className="glass-panel method-config" role="tabpanel">
-          <p className="method-lede">{t(method === "three-number@1" ? "cast.numberBody" : method === "three-coin@1" ? "cast.coinBody" : "cast.randomBody")}</p>
+        <div className="glass-panel method-config">
+          <p className="method-lede">{t("cast.numberBody")}</p>
           <details className="method-explanation">
             <summary><span>{t("methodGuide.title")}</span><span className="method-explanation-icon" aria-hidden="true">＋</span></summary>
             <div>
-              <p>{t(`methodGuide.${guideKey}.body`)}</p>
-              <ul>{guidePoints.map((point) => <li key={point}>{t(`methodGuide.${guideKey}.${point}`)}</li>)}</ul>
+              <p>{t("methodGuide.number.body")}</p>
+              <ul>{["point1", "point2"].map((point) => <li key={point}>{t(`methodGuide.number.${point}`)}</li>)}</ul>
             </div>
           </details>
-          {method === "three-number@1" && <div className="number-fields">
+          <div className="number-fields">
             {([ ["upper", "cast.upper", upperInput], ["lower", "cast.lower", lowerInput] ] as const).map(([key, label, inputRef]) => {
               const trigram = trigramFromInput(numbers[key]);
               return <div className="trigram-field" key={key}>
@@ -185,18 +161,7 @@ export function HomePage() {
               </div>;
             })}
             <label className="field changing-field"><span>{t("cast.changing")}</span><input ref={changingInput} inputMode="numeric" min="1" max="6" value={numbers.changing} aria-invalid={Boolean(error && !between(numbers.changing, 1, 6))} onChange={(event) => { setNumbers((current) => ({ ...current, changing: event.target.value.replace(/\D/g, "").slice(0, 1) })); setError(""); }} /></label>
-          </div>}
-          {method === "three-coin@1" && <div className="coin-grid">
-            {throws.map((row, line) => {
-              const lineLabel = line === 0 ? t("cast.bottom") : line === 5 ? t("cast.top") : t("cast.line", { n: line + 1 });
-              return <div className="coin-row" key={line}><span>{lineLabel}</span><div>{row.map((face, coin) => <button ref={(node) => { coinButtons.current[line * 3 + coin] = node; }} type="button" className={`coin ${face ?? "unset"}`} aria-label={`${lineLabel} · ${coin + 1}`} key={coin} onClick={() => { setCoin(line, coin, face === "heads" ? "tails" : "heads"); setError(""); }}>{face === "tails" ? t("cast.tails") : face === "heads" ? t("cast.heads") : "—"}</button>)}</div></div>;
-            })}
-          </div>}
-          {method === "secure-random@1" && <div className="random-box">
-            {randomDraft ? <Hexagram lineValues={randomDraft.lineValues} label={t("cast.generated")} /> : <div className="random-placeholder" aria-hidden="true"><span>☰</span><span>☷</span></div>}
-            <button ref={randomButton} className="button secondary" disabled={randomBusy} onClick={() => void generateRandom()}>{randomBusy ? t("common.loading") : randomDraft ? t("cast.regenerate") : t("cast.generate")}</button>
-            {randomDraft && <code>{randomDraft.entropyCommitment.slice(0, 31)}…</code>}
-          </div>}
+          </div>
           {error && <p className="form-error" role="alert">{error}</p>}
           <StickyActionBar><button className="button quiet desktop-flow-back" onClick={() => moveTo("question")}>← {t("common.back")}</button><button className="button primary" onClick={review}>{t("cast.review")}</button></StickyActionBar>
         </div>

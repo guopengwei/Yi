@@ -8,13 +8,13 @@ import { optionalSession, requireSession } from "../lib/auth";
 import { isProviderEnabled } from "../lib/ai-config";
 import { reserveBudget } from "../lib/budget";
 import { canonicalFingerprint } from "../lib/crypto";
-import { createReflection, DEEPSEEK_MODEL, estimateDeepSeekReservation, parseSourceSnapshot, REFLECTION_MAX_OUTPUT_TOKENS, REFLECTION_PROMPT_VERSION } from "../lib/deepseek";
+import { createReflection, DEEPSEEK_MODEL, estimateDeepSeekReservation, REFLECTION_MAX_OUTPUT_TOKENS, REFLECTION_PROMPT_VERSION } from "../lib/deepseek";
 import { ApiError } from "../lib/errors";
 import { assertTimezone, clientIp, parseJson, requestLocale } from "../lib/http";
 import { guestIdentity, type Identity } from "../lib/identity";
 import { createCheckoutSession } from "../lib/payments";
 import { archiveReading, ownedReading, publicReading } from "../lib/readings";
-import { reviewedSourceSnapshot } from "../lib/source-catalog";
+import { localizedSourceSnapshot, reviewedSourceSnapshot } from "../lib/source-catalog";
 import { enforceRateLimit } from "../lib/rate-limit";
 import { verifyTurnstile } from "../lib/turnstile";
 
@@ -36,11 +36,11 @@ routes.post("/", async (c) => {
   `).bind(identity.key, request.clientRequestId).first<import("../lib/readings").ReadingRow>();
   if (existing) {
     if (existing.request_fingerprint !== fingerprint) throw new ApiError("IDEMPOTENCY_CONFLICT", 409, "This idempotency key was already used for a different request.");
-    return c.json({ schemaVersion: "reading-operation@1", ...publicReading(existing) });
+    return c.json({ schemaVersion: "reading-operation@1", ...await publicReading(c.env, existing, requestLocale(c)) });
   }
 
   const derivedFacts = deriveReadingFacts(request);
-  const sourceSnapshot = await reviewedSourceSnapshot(c.env, derivedFacts, requestLocale(c));
+  const sourceSnapshot = await reviewedSourceSnapshot(c.env, derivedFacts);
   const facts = sourceSnapshot.length > 0
     ? { ...derivedFacts, sourceStatus: "reviewed" as const, systemStatus: "source-grounded-enabled" as const }
     : derivedFacts;
@@ -83,7 +83,7 @@ routes.post("/", async (c) => {
 routes.get("/:id", async (c) => {
   const { identity } = await requestIdentity(c);
   const reading = await ownedReading(c, c.req.param("id"), identity);
-  return c.json({ schemaVersion: "reading-operation@1", ...publicReading(reading) });
+  return c.json({ schemaVersion: "reading-operation@1", ...await publicReading(c.env, reading, requestLocale(c)) });
 });
 
 routes.post("/:id/contribution", async (c) => {
@@ -159,7 +159,7 @@ routes.post("/:id/reflection", async (c) => {
   const question = reading.question_kind === "question" && reading.question_text
     ? { kind: "question" as const, text: reading.question_text }
     : { kind: "none" as const };
-  const sources = parseSourceSnapshot(reading.source_snapshot_json, consent.includeSourceMaterial);
+  const sources = await localizedSourceSnapshot(c.env, reading.source_snapshot_json, consent.includeSourceMaterial, requestLocale(c));
   let providerEligible = !safety.routed && sources.length > 0 && await isProviderEnabled(c.env);
   const operationId = crypto.randomUUID();
   let budget: Awaited<ReturnType<typeof reserveBudget>> | null = null;

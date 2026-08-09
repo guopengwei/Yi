@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import OpenAI from "openai";
 import { z } from "zod";
 import { IDENTIFIER_CATALOG, KING_WEN_NAMES_ZH_CN, lineKey } from "../shared/catalog";
+import { englishTranslationIssue } from "./catalog-language-quality";
 
 const root = resolve(import.meta.dirname, "..");
 const sourcePath = resolve(root, "ReferenceProg/cloudfunctions/divination/takashimaData.json");
@@ -99,6 +100,9 @@ async function translateBatch(client: OpenAI, batch: Unit[], locale: "zh-HK" | "
       if (parsed.items.length !== expected.length || parsed.items.some((item, index) => item.id !== expected[index])) {
         throw new Error("DeepSeek translation IDs did not exactly match the batch");
       }
+      if (locale === "en" && parsed.items.some((item) => englishTranslationIssue(item.text))) {
+        throw new Error("DeepSeek returned an incomplete English translation");
+      }
       return new Map(parsed.items.map((item) => [item.id, item.text]));
     } catch (error) {
       lastError = error;
@@ -155,7 +159,7 @@ async function main() {
   await mkdir(resolve(root, ".wrangler"), { recursive: true });
   let cached: Record<string, Translation> = {};
   try { cached = JSON.parse(await readFile(cachePath, "utf8")) as Record<string, Translation>; } catch { /* first run */ }
-  const missing = units.filter((unit) => !cached[unit.id]?.zhHK || !cached[unit.id]?.en);
+  const missing = units.filter((unit) => !cached[unit.id]?.zhHK || !cached[unit.id]?.en || englishTranslationIssue(cached[unit.id]!.en));
   const chunks = chunkUnits(missing);
   const client = new OpenAI({ apiKey, baseURL: "https://api.deepseek.com", timeout: 90_000, maxRetries: 0 });
   for (let groupStart = 0; groupStart < chunks.length; groupStart += 3) {

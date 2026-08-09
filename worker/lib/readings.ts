@@ -1,8 +1,11 @@
 import type { Context } from "hono";
 import type { CastFacts } from "../../shared/casting";
+import type { Locale } from "../../shared/catalog";
 import type { AppVariables, Env } from "../env";
 import type { Identity } from "./identity";
+import type { SourceExcerpt } from "./deepseek";
 import { ApiError } from "./errors";
+import { localizedSourceSnapshot } from "./source-catalog";
 
 export interface ReadingRow {
   id: string;
@@ -37,7 +40,13 @@ export async function ownedReading(c: Context<{ Bindings: Env; Variables: AppVar
   return row;
 }
 
-export function publicReading(row: ReadingRow) {
+export function mappedTakashimaInterpretations(sources: readonly SourceExcerpt[], facts: CastFacts): SourceExcerpt[] {
+  const mappedEntryKeys = new Set(facts.movingLines.map((line) => `line:${facts.primary.id}:${line.position}`));
+  if (facts.specialLine) mappedEntryKeys.add(`special:${facts.primary.id}:${facts.specialLine.lineKey}`);
+  return sources.filter((source) => mappedEntryKeys.has(source.entryKey));
+}
+
+export async function publicReading(env: Env, row: ReadingRow, locale: Locale) {
   const base = {
     id: row.id,
     status: row.status,
@@ -46,9 +55,12 @@ export function publicReading(row: ReadingRow) {
     expiresAt: row.expires_at ? new Date(row.expires_at).toISOString() : null,
   };
   if (row.status !== "ready") return base;
+  const facts = JSON.parse(row.facts_json) as CastFacts;
+  const sources = await localizedSourceSnapshot(env, row.source_snapshot_json, true, locale);
   return {
     ...base,
-    facts: JSON.parse(row.facts_json) as CastFacts,
+    facts,
+    takashimaInterpretations: mappedTakashimaInterpretations(sources, facts),
     reflection: row.reflection_json ? JSON.parse(row.reflection_json) as unknown : null,
     reflectionShareEligible: Boolean(row.reflection_json) && row.reflection_included_question !== 1,
     safety: JSON.parse(row.safety_json) as unknown,

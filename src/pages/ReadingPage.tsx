@@ -13,12 +13,19 @@ import { useSession } from "../lib/session";
 import { hexagramName } from "../lib/hexagram-name";
 
 interface Reflection extends ReflectionArticleData { questionsToConsider: string[]; cautions: string[] }
+interface TakashimaInterpretation {
+  id: string;
+  entryKey: string;
+  text: string;
+  provenance: { title: string; locator: string; sourceUrl?: string };
+}
 interface ReadingResponse {
   id: string;
   status: "awaiting_contribution" | "payment_pending" | "ready" | "failed" | "expired";
   contributionAmountHkd: number | null;
   createdAt: string;
   facts?: CastFacts;
+  takashimaInterpretations?: TakashimaInterpretation[];
   reflection?: Reflection | null;
   reflectionShareEligible?: boolean;
   safety?: { routed: boolean; limitations: string[] };
@@ -49,7 +56,7 @@ export function ReadingPage() {
     if (!id) return;
     try { setReading(await api<ReadingResponse>(`/api/v1/readings/${id}`)); setError(""); }
     catch (reason) { setError(reason instanceof Error ? reason.message : t("common.error")); }
-  }, [id, t]);
+  }, [id, i18n.resolvedLanguage, t]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     if (reading?.status !== "payment_pending") return;
@@ -110,6 +117,7 @@ export function ReadingPage() {
   if (reading.status === "awaiting_contribution" || cancelled) return <section className="page narrow"><ContributionPanel readingId={reading.id} cancelled={cancelled} /></section>;
   if (reading.status !== "ready" || !reading.facts) return <section className="page narrow payment-wait" aria-live="polite" aria-busy="true"><div className="waiting-orbit"><span /><span /></div><p className="eyebrow">Stripe / webhook</p><h1>{t("result.waiting")}</h1><p>{t("result.waitingBody")}</p><p className="status-pill">{t("contribution.pending")}</p></section>;
   const facts = reading.facts;
+  const takashimaInterpretations = reading.takashimaInterpretations ?? [];
   const primaryName = hexagramName(facts.primary, i18n.language);
   const relatingName = hexagramName(facts.relating, i18n.language);
   return <article className="result-page page">
@@ -127,6 +135,26 @@ export function ReadingPage() {
       <div className="glass-subpanel"><p className="eyebrow">{t("result.movingLines")}</p><div className="moving-chips">{facts.movingLines.length ? facts.movingLines.map((line) => <span key={line.position}>{i18n.language === "en" ? `${t("cast.line", { n: line.position })} · ${t(line.yinYang === "yin" ? "cast.yin" : "cast.yang")}` : line.lineKey}</span>) : <span>{t("result.none")}</span>}</div>{facts.specialLine && <p>{t(facts.specialLine.lineKey === "用九" ? "specialLine.nine" : "specialLine.six")}</p>}</div>
       <div className="glass-subpanel source-status"><p className="eyebrow">{t(facts.sourceStatus === "reviewed" ? "result.sourceReviewed" : "result.sourcePending")}</p><p>{t(facts.sourceStatus === "reviewed" ? "result.sourceReviewedBody" : "result.sourceBody")}</p></div>
     </section>
+    {takashimaInterpretations.length > 0 && <section className="reflection-section takashima-section" aria-labelledby="takashima-interpretation-title">
+      <header className="reflection-heading"><p className="eyebrow">{t("result.takashimaEyebrow")}</p><h2 id="takashima-interpretation-title">{t("result.takashimaTitle")}</h2></header>
+      <div className="takashima-content">
+        <p className="takashima-introduction">{t("result.takashimaBody")}</p>
+        {takashimaInterpretations.map((source, index) => {
+          const position = Number(source.entryKey.split(":").at(-1));
+          const movingLine = facts.movingLines.find((line) => line.position === position);
+          const label = i18n.language === "en" ? t("cast.line", { n: position }) : movingLine?.lineKey ?? t("result.movingLines");
+          const headingId = `takashima-source-${index}`;
+          return <article className="takashima-excerpt" aria-labelledby={headingId} key={source.id}>
+            <h3 id={headingId}>{label}</h3>
+            <TakashimaSourceText text={source.text} />
+            <footer><span>{t("result.takashimaSource")}</span> {source.provenance.sourceUrl
+              ? <a href={source.provenance.sourceUrl} target="_blank" rel="noreferrer">{source.provenance.title}</a>
+              : source.provenance.title} · {source.provenance.locator}</footer>
+          </article>;
+        })}
+        <p className="takashima-caution">{t("result.takashimaCaution")}</p>
+      </div>
+    </section>}
     <section className="reflection-section">
       <header className="reflection-heading"><p className="eyebrow">Optional / DeepSeek</p><h2>{t("result.reflection")}</h2></header>
       <div className="reflection-content">{reading.reflection ? <ReflectionArticle reflection={reading.reflection} />
@@ -142,4 +170,32 @@ export function ReadingPage() {
     {chatOpen && <section className="consent-card glass-panel"><h3>{t("consent.title")}</h3><p>{t("chat.intro")}</p><label className="check-row important"><input type="checkbox" checked={chatAgreed} onChange={(event) => setChatAgreed(event.target.checked)} /><span>{t("consent.facts")}</span></label><label className="check-row"><input type="checkbox" checked={chatQuestion} onChange={(event) => setChatQuestion(event.target.checked)} /><span>{t("consent.question")}</span></label><label className="check-row"><input type="checkbox" checked={chatSources} onChange={(event) => setChatSources(event.target.checked)} /><span>{t("consent.sources")}</span></label><div className="button-row"><button className="button quiet" onClick={() => setChatOpen(false)}>{t("common.cancel")}</button><button className="button primary" disabled={!chatAgreed || busy} onClick={() => void startChat()}>{t("result.chat")}</button></div></section>}
     {archiveId && <ShareActions archiveId={archiveId} facts={facts} hasReflection={Boolean(reading.reflection) && reading.reflectionShareEligible === true} />}
   </article>;
+}
+
+type TakashimaTextBlock =
+  | { kind: "heading"; text: string }
+  | { kind: "paragraph"; text: string }
+  | { kind: "list"; items: string[] };
+
+function TakashimaSourceText({ text }: { text: string }) {
+  const blocks: TakashimaTextBlock[] = [];
+  let listItems: string[] = [];
+  const flushList = () => {
+    if (listItems.length > 0) blocks.push({ kind: "list", items: listItems });
+    listItems = [];
+  };
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) { flushList(); continue; }
+    const heading = line.match(/^#{1,6}\s+(.+)$/);
+    const listItem = line.match(/^[*+-]\s+(.+)$/);
+    if (listItem) { listItems.push(listItem[1]!.trim()); continue; }
+    flushList();
+    blocks.push(heading ? { kind: "heading", text: heading[1]!.trim() } : { kind: "paragraph", text: line });
+  }
+  flushList();
+  return <div className="takashima-source-text">{blocks.map((block, index) => block.kind === "heading"
+    ? <h4 key={index}>{block.text}</h4>
+    : block.kind === "paragraph" ? <p key={index}>{block.text}</p>
+      : <ul key={index}>{block.items.map((item) => <li key={item}>{item}</li>)}</ul>)}</div>;
 }

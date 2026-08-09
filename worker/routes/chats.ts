@@ -6,10 +6,11 @@ import type { AppVariables, Env } from "../env";
 import { requireSession } from "../lib/auth";
 import { isProviderEnabled } from "../lib/ai-config";
 import { canonicalFingerprint } from "../lib/crypto";
-import { parseSourceSnapshot, type AiReflection, type ChatContext } from "../lib/deepseek";
+import type { AiReflection, ChatContext } from "../lib/deepseek";
 import { ApiError } from "../lib/errors";
 import { parseJson, requestLocale } from "../lib/http";
 import { archiveReading, ownedReading, type ReadingRow } from "../lib/readings";
+import { localizedSourceSnapshot } from "../lib/source-catalog";
 
 const routes = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
@@ -76,7 +77,7 @@ routes.post("/", async (c) => {
     facts: JSON.parse(fullReading.facts_json) as CastFacts,
     reflection: fullReading.reflection_json ? JSON.parse(fullReading.reflection_json) as AiReflection : null,
     question,
-    sources: parseSourceSnapshot(fullReading.source_snapshot_json, body.includeSourceMaterial),
+    sources: await localizedSourceSnapshot(c.env, fullReading.source_snapshot_json, body.includeSourceMaterial, requestLocale(c)),
     locale: requestLocale(c),
     safetyRouted: safety.routed === true,
   };

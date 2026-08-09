@@ -8,13 +8,15 @@ The deterministic suite exhaustively checks:
 
 - all 64 primary patterns;
 - all 384 single-line changes;
-- all 4,096 changing masks;
-- all three-coin sums and pure-hexagram special lines;
-- strict invalid-input rejection and browser cryptographic entropy commitments.
+- exactly one changing line for every accepted cast;
+- exact, fail-closed mapping from that line to its reviewed Takashima excerpt;
+- trilingual source snapshots, per-request locale selection and same-release recovery for legacy readings;
+- rejection of removed multi-line casting methods;
+- strict invalid-input rejection.
 
 Worker tests cover guest ownership/idempotency, HK$0 state transitions, owner-scoped FTS, signed/mismatched/replayed Stripe webhooks, budget reservation/reconciliation, and immutable owner-scoped Durable Object chat context. Provider tests assert the exact DeepSeek thinking request, absence of temperature, bounded output, consent bypass, fabricated-source rejection and prompt-sized budget estimation. Transactional mail templates are checked in all three locales.
 
-`npm run test:e2e` runs desktop and mobile Chromium against the real Vite/Worker integration. It exercises the reviewed three-number/HK$0 flow, default and persisted locale behavior, serious/critical axe checks, keyboard skip navigation, reduced motion and horizontal overflow in all locales.
+`npm run test:e2e` runs desktop and mobile Chromium against the real Vite/Worker integration. It exercises the reviewed three-number/HK$0 flow, live locale switching for the directly mapped Takashima text without an AI request, default and persisted locale behavior, serious/critical axe checks, keyboard skip navigation, reduced motion and horizontal overflow in all locales.
 
 ## Credentialed acceptance before production
 
