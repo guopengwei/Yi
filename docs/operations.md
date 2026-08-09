@@ -47,7 +47,9 @@ npm run release:catalog
 npm run catalog:import:preview
 ```
 
-Only after editorial verification should `CATALOG_REVIEWED` and `AI_ENABLED` become `true`. The DeepSeek adapter is fixed to `https://api.deepseek.com`, `deepseek-v4-flash`, thinking enabled, `reasoning_effort: high`, no temperature and bounded structured output.
+Only after editorial verification should `CATALOG_REVIEWED` and `AI_ENABLED` become `true`. The DeepSeek adapter is fixed to `https://api.deepseek.com`, `deepseek-v4-flash`, the OpenAI-compatible Responses API, thinking enabled with `reasoning.effort: high`, no temperature and bounded structured output.
+
+DeepSeek's Responses API is currently stateless: `previous_response_id`, `conversation`, and `store` are unsupported and silently ignored. Chat therefore resends its bounded history as a stable message prefix. DeepSeek's automatic context cache can reuse matching prefixes, and the adapter accounts for `usage.input_tokens_details.cached_tokens` at the provider's cache-hit rate. Do not switch chat to response-ID-only continuation until DeepSeek documents stateful support; doing so now would discard prior context.
 
 ## 5. Secrets
 
