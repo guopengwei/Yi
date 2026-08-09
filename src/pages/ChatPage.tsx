@@ -8,7 +8,7 @@ import { useSession } from "../lib/session";
 interface Message { seq: number; id: string; role: "user" | "assistant"; content: string; createdAt: string }
 
 export function ChatPage() {
-  const { id } = useParams(); const { t } = useTranslation();
+  const { id } = useParams(); const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { session, loading } = useSession();
   const authenticated = Boolean(session);
@@ -52,7 +52,7 @@ export function ChatPage() {
   useEffect(() => { log.current?.scrollTo({ top: log.current.scrollHeight, behavior: "smooth" }); }, [messages, stream?.content]);
   const send = () => {
     if (!draft.trim() || socket.current?.readyState !== WebSocket.OPEN) return;
-    socket.current.send(JSON.stringify({ type: "message", id: crypto.randomUUID(), content: draft.trim() }));
+    socket.current.send(JSON.stringify({ type: "message", id: crypto.randomUUID(), content: draft.trim(), locale: i18n.language }));
     setDraft("");
     if (composer.current) composer.current.style.height = "auto";
   };

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { deriveReadingFacts } from "../shared/casting";
 import { readingCreateSchema } from "../shared/contracts";
-import { buildDeepSeekRequest, createReflection, estimateDeepSeekReservation, REFLECTION_MAX_OUTPUT_TOKENS, type SourceExcerpt, validateReflectionCandidate } from "../worker/lib/deepseek";
+import { buildChatDeepSeekRequest, buildDeepSeekRequest, createReflection, estimateDeepSeekReservation, REFLECTION_MAX_OUTPUT_TOKENS, type SourceExcerpt, validateReflectionCandidate } from "../worker/lib/deepseek";
 import type { Env } from "../worker/env";
 
 const facts = deriveReadingFacts(readingCreateSchema.parse({
@@ -58,6 +58,29 @@ describe("DeepSeek adapter", () => {
     expect(body.messages[0]!.content).toContain("hexagram entries are compilations");
     expect(body.messages[0]!.content).toContain("700-1,100 words");
     expect(body.messages[0]!.content).toContain("6-9 clear paragraphs");
+  });
+
+  it.each([
+    ["zh-HK", "Traditional Chinese as used in Hong Kong (繁體中文)"],
+    ["zh-CN", "Simplified Chinese (简体中文)"],
+    ["en", "English"],
+  ] as const)("requires reflection output in the current %s language", (locale, language) => {
+    const body = buildDeepSeekRequest({ facts, question: { kind: "none" }, locale, includeQuestion: false, sources: [source] });
+    expect(body.messages[0]!.content).toContain(`Output language: ${language}.`);
+    expect(body.messages[0]!.content).toContain("Use this language for every user-visible string");
+  });
+
+  it.each([
+    ["zh-HK", "Traditional Chinese as used in Hong Kong (繁體中文)"],
+    ["zh-CN", "Simplified Chinese (简体中文)"],
+    ["en", "English"],
+  ] as const)("requires chat output in the current %s language", (locale, language) => {
+    const body = buildChatDeepSeekRequest({
+      context: { facts, reflection: null, question: { kind: "withheld" }, sources: [source], locale, safetyRouted: false },
+      messages: [{ role: "user", content: "Please continue." }],
+    });
+    expect(body.messages[0]!.content).toContain(`Output language: ${language}.`);
+    expect(body.messages[0]!.content).toContain("regardless of the language used in source excerpts or earlier conversation messages");
   });
 
   it("accepts the expanded detailed perspective size", () => {

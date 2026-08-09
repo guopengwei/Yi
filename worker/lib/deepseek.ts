@@ -6,9 +6,19 @@ import type { ReadingQuestion } from "../../shared/contracts";
 import type { Env } from "../env";
 
 export const DEEPSEEK_MODEL = "deepseek-v4-flash" as const;
-export const REFLECTION_PROMPT_VERSION = "yi-reflection@2" as const;
+export const REFLECTION_PROMPT_VERSION = "yi-reflection@3" as const;
 export const REFLECTION_MAX_OUTPUT_TOKENS = 8_000;
-export const CHAT_PROMPT_VERSION = "yi-chat@1" as const;
+export const CHAT_PROMPT_VERSION = "yi-chat@2" as const;
+
+const outputLanguages: Record<Locale, string> = {
+  "zh-HK": "Traditional Chinese as used in Hong Kong (繁體中文)",
+  "zh-CN": "Simplified Chinese (简体中文)",
+  en: "English",
+};
+
+function outputLanguageInstruction(locale: Locale) {
+  return `Output language: ${outputLanguages[locale]}. Use this language for every user-visible string, regardless of the language used in source excerpts or earlier conversation messages.`;
+}
 
 const reflectionSchema = z.object({
   schemaVersion: z.literal("ai-reflection@1"),
@@ -120,6 +130,7 @@ export function buildDeepSeekRequest(input: {
         role: "system",
         content: [
           `You are Yi, a thoughtful cultural reflection assistant. Reply only with JSON matching ${REFLECTION_PROMPT_VERSION}.`,
+          outputLanguageInstruction(input.locale),
           "Treat the reading as a cultural prompt for reflection, never a prediction or instruction.",
           "Use only the supplied deterministic facts and approved source excerpts. Never invent quotations or source identifiers.",
           "The user payload's takashimaInterpretationGuidance is approved context from Takashima Donsho's Takashima Ekidan (高島吞象《高島易斷》). Use its excerpts as the primary interpretation guidance for the reflection and cite every excerpt used via its exact approved ID in sourceRefs.",
@@ -130,7 +141,7 @@ export function buildDeepSeekRequest(input: {
           "Detailed visible analysis is required, but never reveal private chain-of-thought, hidden reasoning, or internal deliberation.",
           "sourceRefs MUST be a JSON array containing only approved source ID strings. Never place source objects, excerpts, provenance, or entry keys in sourceRefs.",
           "Return exactly 3 distinct questionsToConsider items and 0-3 cautions items. Three is a hard maximum for each array.",
-          "Do not expose hidden reasoning. Use the requested locale.",
+          "Do not expose hidden reasoning.",
           'Shape: {"schemaVersion":"ai-reflection@1","summary":"...","perspective":"...","questionsToConsider":["..."],"cautions":[],"sourceRefs":[],"grounding":{"primaryPattern":"000000","relatingPattern":"000000","changingPositions":[]}}',
         ].join("\n"),
       },
@@ -271,6 +282,38 @@ export interface ChatContext {
   safetyRouted: boolean;
 }
 
+export function buildChatDeepSeekRequest(input: {
+  context: ChatContext;
+  messages: readonly { role: "user" | "assistant"; content: string }[];
+}): DeepSeekRequestBody {
+  return {
+    model: DEEPSEEK_MODEL,
+    reasoning_effort: "high",
+    thinking: { type: "enabled" },
+    max_tokens: 900,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: [
+          "You are Yi, a restrained cultural reflection assistant.",
+          outputLanguageInstruction(input.context.locale),
+          "Use only the immutable reading context and approved sources. Do not predict, prescribe, diagnose, or expose hidden reasoning.",
+          "sourceRefs MUST contain approved source ID strings only, never source objects or excerpts.",
+          "Reply as JSON: {\"reply\":\"plain text\",\"sourceRefs\":[\"approved-id\"]}. Never invent source IDs.",
+        ].join("\n"),
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          immutableContext: input.context,
+          conversation: input.messages.slice(-20),
+        }),
+      },
+    ],
+  };
+}
+
 export async function createChatReply(env: Env, input: {
   context: ChatContext;
   messages: readonly { role: "user" | "assistant"; content: string }[];
@@ -292,31 +335,7 @@ export async function createChatReply(env: Env, input: {
   if (env.CATALOG_REVIEWED !== "true" || input.context.sources.length === 0) return fallback("catalog-unreviewed");
   if (env.AI_ENABLED !== "true") return fallback("ai-disabled");
   if (!env.DEEPSEEK_API_KEY) return fallback("provider-unconfigured");
-  const request: DeepSeekRequestBody = {
-    model: DEEPSEEK_MODEL,
-    reasoning_effort: "high",
-    thinking: { type: "enabled" },
-    max_tokens: 900,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content: [
-          "You are Yi, a restrained cultural reflection assistant.",
-          "Use only the immutable reading context and approved sources. Do not predict, prescribe, diagnose, or expose hidden reasoning.",
-          "sourceRefs MUST contain approved source ID strings only, never source objects or excerpts.",
-          "Reply as JSON: {\"reply\":\"plain text\",\"sourceRefs\":[\"approved-id\"]}. Never invent source IDs.",
-        ].join("\n"),
-      },
-      {
-        role: "user",
-        content: JSON.stringify({
-          immutableContext: input.context,
-          conversation: input.messages.slice(-20),
-        }),
-      },
-    ],
-  };
+  const request = buildChatDeepSeekRequest(input);
   try {
     const client = new OpenAI({ apiKey: env.DEEPSEEK_API_KEY, baseURL: "https://api.deepseek.com", timeout: 20_000, maxRetries: 0 });
     const response = await client.chat.completions.create(request as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming);

@@ -5,6 +5,7 @@ import { isProviderEnabled } from "../lib/ai-config";
 import { CHAT_PROMPT_VERSION, createChatReply, DEEPSEEK_MODEL, estimateDeepSeekReservation, type ChatContext } from "../lib/deepseek";
 import { ApiError } from "../lib/errors";
 import type { Env } from "../env";
+import type { Locale } from "../../shared/catalog";
 
 interface ConnectionAttachment {
   ownerId: string;
@@ -23,6 +24,7 @@ const clientMessageSchema = z.object({
   type: z.literal("message"),
   id: z.string().uuid(),
   content: z.string().trim().min(1).max(4_000),
+  locale: z.enum(["zh-HK", "zh-CN", "en"]).optional(),
 }).strict();
 
 export class ReadingChat extends DurableObject<Env> {
@@ -118,7 +120,7 @@ export class ReadingChat extends DurableObject<Env> {
       return;
     }
     try {
-      await this.handleTurn(attachment.ownerId, parsed.data.id, parsed.data.content);
+      await this.handleTurn(attachment.ownerId, parsed.data.id, parsed.data.content, parsed.data.locale);
     } catch (error) {
       socket.send(JSON.stringify({ type: "error", code: error instanceof Error ? error.message : "CHAT_FAILED" }));
     }
@@ -141,7 +143,7 @@ export class ReadingChat extends DurableObject<Env> {
     }
   }
 
-  private async handleTurn(ownerId: string, clientId: string, content: string) {
+  private async handleTurn(ownerId: string, clientId: string, content: string, currentLocale?: Locale) {
     this.authorize(ownerId);
     const existing = this.ctx.storage.sql.exec<StoredMessage>(
       "SELECT seq, client_id, role, content, created_at FROM messages WHERE client_id = ?",
@@ -152,7 +154,8 @@ export class ReadingChat extends DurableObject<Env> {
       return;
     }
     const conversation = this.ctx.storage.sql.exec<{ context_json: string }>("SELECT context_json FROM conversation WHERE singleton = 1").one();
-    const context = JSON.parse(conversation.context_json) as ChatContext;
+    const storedContext = JSON.parse(conversation.context_json) as ChatContext;
+    const context = currentLocale ? { ...storedContext, locale: currentLocale } : storedContext;
     const previousHistory = this.ctx.storage.sql.exec<StoredMessage>(
       "SELECT seq, client_id, role, content, created_at FROM messages ORDER BY seq DESC LIMIT 19",
     ).toArray().reverse().map((message) => ({ role: message.role, content: message.content }));
