@@ -50,7 +50,7 @@ Localized requests send `X-Yi-Locale: zh-HK | zh-CN | en`. Ready reading respons
 | POST | `/contact` | guest/user | rate-limited contact request and receipt |
 | GET/PATCH | `/admin/*` | admin | content-redacted operations and limits |
 
-The chat start body and reflection body require `consent: true` and `includeReadingFacts: true`, with separate booleans for question and source material. High-stakes routing always bypasses the provider. A reflection generated with the original question is excluded from anonymous share snapshots.
+AI operation bodies require `consent: true` and `includeReadingFacts: true`, with booleans recording whether the question and source material are included. Ready-reading responses return the stored `aiConsentScope` after the first AI operation so interpretation and chat can reuse it without another prompt. High-stakes routing always bypasses the provider. A reflection generated with the original question is excluded from anonymous share snapshots.
 
 ## Limits
 

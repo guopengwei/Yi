@@ -406,6 +406,25 @@ describe("Durable Object contracts", () => {
     });
     expect(completeReading.status).toBe(200);
 
+    const createReflection = await SELF.fetch(`https://example.test/api/v1/readings/${reading.id}/reflection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({
+        schemaVersion: "ai-consent@1",
+        consent: true,
+        includeReadingFacts: true,
+        includeQuestion: true,
+        includeSourceMaterial: false,
+      }),
+    });
+    expect(createReflection.status).toBe(200);
+    const reflectedReading = await SELF.fetch(`https://example.test/api/v1/readings/${reading.id}`, { headers: { Cookie: cookie } });
+    expect((await reflectedReading.json<{ aiConsentScope: unknown }>()).aiConsentScope).toEqual({
+      includeReadingFacts: true,
+      includeQuestion: true,
+      includeSourceMaterial: false,
+    });
+
     const conversationId = crypto.randomUUID();
     const createChat = await SELF.fetch("https://example.test/api/v1/chats", {
       method: "POST",
@@ -419,6 +438,12 @@ describe("Durable Object contracts", () => {
       }),
     });
     expect(createChat.status).toBe(201);
+    const refreshedReading = await SELF.fetch(`https://example.test/api/v1/readings/${reading.id}`, { headers: { Cookie: cookie } });
+    expect((await refreshedReading.json<{ aiConsentScope: unknown }>()).aiConsentScope).toEqual({
+      includeReadingFacts: true,
+      includeQuestion: false,
+      includeSourceMaterial: false,
+    });
 
     const response = await SELF.fetch(`https://example.test/api/v1/chats/${conversationId}/socket`, {
       headers: { Cookie: cookie, Upgrade: "websocket" },

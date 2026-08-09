@@ -306,7 +306,7 @@ test("opens the chat socket after an authenticated session loads", async ({ page
   expect(chatSockets).toBeGreaterThan(0);
 });
 
-test("reuses reading-facts consent when discussing a reflected reading", async ({ page }) => {
+test("starts follow-up chat with the AI consent already stored for the reading", async ({ page }) => {
   await useLocale(page, "en");
   await mockSignedIn(page);
   const readingId = "8933228a-76d5-49dc-824e-595d2c92bef3";
@@ -326,15 +326,64 @@ test("reuses reading-facts consent when discussing a reflected reading", async (
         questionsToConsider: [],
         cautions: [],
       },
-      reflectionShareEligible: true,
+      aiConsentScope: {
+        includeReadingFacts: true,
+        includeQuestion: true,
+        includeSourceMaterial: true,
+      },
+      reflectionShareEligible: false,
+      safety: { routed: false, limitations: [] },
+    }),
+  }));
+  let chatRequest: Record<string, unknown> | null = null;
+  await page.route("**/api/v1/chats", async (route) => {
+    chatRequest = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({ id: "7d3be0dd-3a28-447a-9a41-171b1ba1f514", archiveId: "5f52ba30-d4c2-4e43-8d18-4bad534ee394" }),
+    });
+  });
+
+  await page.goto(`/reading/${readingId}`);
+  await page.getByRole("button", { name: "Discuss this reading" }).click();
+
+  await expect.poll(() => chatRequest).toEqual({
+    readingId,
+    consent: true,
+    includeReadingFacts: true,
+    includeQuestion: true,
+    includeSourceMaterial: true,
+  });
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
+});
+
+test("asks for AI consent with one checkbox", async ({ page }) => {
+  await useLocale(page, "en");
+  await mockSignedIn(page);
+  const readingId = "1b72c194-cb72-4a45-863f-544a9a862e8f";
+  await page.route(`**/api/v1/readings/${readingId}`, (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      id: readingId,
+      status: "ready",
+      contributionAmountHkd: 0,
+      createdAt: "2026-08-08T00:00:00.000Z",
+      facts: sampleFacts(),
+      reflection: null,
+      aiConsentScope: null,
+      reflectionShareEligible: false,
       safety: { routed: false, limitations: [] },
     }),
   }));
 
   await page.goto(`/reading/${readingId}`);
-  await page.getByRole("button", { name: "Discuss this reading" }).click();
+  await page.getByRole("button", { name: "Choose whether to add AI interpretation" }).click();
 
-  await expect(page.getByRole("checkbox", { name: "I consent to sending this reading’s facts to DeepSeek" })).toBeChecked();
+  await expect(page.getByRole("checkbox")).toHaveCount(1);
+  await expect(page.getByRole("checkbox", { name: "I agree to use this data with DeepSeek for this reading and its follow-up chat" })).toBeVisible();
+  await expect(page.getByText("Data sent to DeepSeek:")).toBeVisible();
 });
 
 test("supports keyboard entry and reduced motion", async ({ page }) => {

@@ -21,6 +21,10 @@ export interface ReadingRow {
   facts_json: string;
   reflection_json: string | null;
   reflection_included_question: number;
+  reflection_included_source_material: number;
+  ai_consent_granted: number;
+  ai_consent_included_question: number;
+  ai_consent_included_source_material: number;
   source_snapshot_json: string | null;
   safety_json: string;
   contribution_amount_hkd: number | null;
@@ -99,6 +103,11 @@ export async function publicReading(env: Env, row: ReadingRow, locale: Locale) {
     facts,
     takashimaInterpretations: mappedTakashimaInterpretations(sources, facts),
     reflection: reflectionJson ? JSON.parse(reflectionJson) as unknown : null,
+    aiConsentScope: row.ai_consent_granted === 1 ? {
+      includeReadingFacts: true as const,
+      includeQuestion: row.ai_consent_included_question === 1,
+      includeSourceMaterial: row.ai_consent_included_source_material === 1,
+    } : null,
     reflectionShareEligible: Boolean(reflectionJson) && row.reflection_included_question !== 1,
     safety: JSON.parse(row.safety_json) as unknown,
   };

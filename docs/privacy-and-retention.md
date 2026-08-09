@@ -2,8 +2,8 @@
 
 ## Data minimization
 
-- Questions remain server-side and are not sent to DeepSeek unless the user separately selects “include my original question”.
-- Reading facts and rights-cleared source excerpts each require explicit consent for every AI operation.
+- Questions remain server-side and are not sent to DeepSeek unless the user explicitly agrees to the disclosed AI data scope for that reading.
+- A reading requires one explicit AI consent covering its disclosed facts, question and rights-cleared source excerpts. Follow-up chat reuses that stored data scope instead of asking again.
 - Safety-routed questions bypass AI entirely.
 - DeepSeek API credentials and provider reasoning never reach browser responses.
 - Anonymous share snapshots contain deterministic facts and, when eligible and selected, the reflection. They never contain account identity, question, notes or chat.

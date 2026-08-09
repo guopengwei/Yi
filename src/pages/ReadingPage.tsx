@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { CastFacts } from "../../shared/casting";
@@ -27,8 +27,15 @@ interface ReadingResponse {
   facts?: CastFacts;
   takashimaInterpretations?: TakashimaInterpretation[];
   reflection?: Reflection | null;
+  aiConsentScope?: AiConsentScope | null;
   reflectionShareEligible?: boolean;
   safety?: { routed: boolean; limitations: string[] };
+}
+
+interface AiConsentScope {
+  includeReadingFacts: true;
+  includeQuestion: boolean;
+  includeSourceMaterial: boolean;
 }
 
 export function ReadingPage() {
@@ -41,16 +48,12 @@ export function ReadingPage() {
   const [error, setError] = useState("");
   const [consentOpen, setConsentOpen] = useState(false);
   const [agreed, setAgreed] = useState(false);
-  const [includeQuestion, setIncludeQuestion] = useState(false);
-  const [includeSources, setIncludeSources] = useState(false);
   const [turnstile, setTurnstile] = useState("");
   const [turnstileReset, setTurnstileReset] = useState(0);
   const [busy, setBusy] = useState(false);
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatAgreed, setChatAgreed] = useState(false);
-  const [chatQuestion, setChatQuestion] = useState(false);
-  const [chatSources, setChatSources] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -64,16 +67,19 @@ export function ReadingPage() {
     return () => window.clearInterval(timer);
   }, [reading?.status, load]);
 
-  const reflection = async () => {
-    if (!id || !agreed) return;
+  const reflection = async (scope?: AiConsentScope) => {
+    if (!id || (!scope && !agreed)) return;
+    const consentScope = scope ?? {
+      includeReadingFacts: true as const,
+      includeQuestion: true,
+      includeSourceMaterial: Boolean(reading?.takashimaInterpretations?.length),
+    };
     setBusy(true); setError("");
     try {
       await postJson(`/api/v1/readings/${id}/reflection`, {
         schemaVersion: "ai-consent@1",
         consent: true,
-        includeReadingFacts: true,
-        includeQuestion,
-        includeSourceMaterial: includeSources,
+        ...consentScope,
         ...(!session ? { turnstileToken: turnstile } : {}),
       });
       setConsentOpen(false); await load();
@@ -91,24 +97,30 @@ export function ReadingPage() {
     catch (reason) { setError(reason instanceof Error ? reason.message : t("common.error")); }
     finally { setBusy(false); }
   };
-  const openChat = () => {
-    setChatAgreed(Boolean(reading?.reflection));
-    setChatOpen(true);
-  };
-  const startChat = async () => {
-    if (!id || !chatAgreed) return;
+  const startChat = async (scope?: AiConsentScope) => {
+    if (!id || (!scope && !chatAgreed)) return;
     if (!session) { navigate("/auth", { state: { returnTo: `/reading/${id}` } }); return; }
+    const consentScope = scope ?? {
+      includeReadingFacts: true as const,
+      includeQuestion: true,
+      includeSourceMaterial: Boolean(reading?.takashimaInterpretations?.length),
+    };
     setBusy(true);
     try {
       const response = await postJson<{ id: string; archiveId: string }>("/api/v1/chats", {
         readingId: id,
         consent: true,
-        includeReadingFacts: true,
-        includeQuestion: chatQuestion,
-        includeSourceMaterial: chatSources,
+        ...consentScope,
       }, { "Idempotency-Key": crypto.randomUUID() });
       setArchiveId(response.archiveId); navigate(`/chat/${response.id}`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : t("common.error")); setBusy(false); }
+  };
+  const openChat = () => {
+    if (!id) return;
+    if (!session) { navigate("/auth", { state: { returnTo: `/reading/${id}` } }); return; }
+    if (reading?.aiConsentScope) { void startChat(reading.aiConsentScope); return; }
+    setChatAgreed(false);
+    setChatOpen(true);
   };
 
   if (error && !reading) return <section className="page narrow"><PageState kind="error" title={t("common.error")} body={error} action={{ label: t("common.retry"), onClick: () => void load() }} /></section>;
@@ -158,18 +170,40 @@ export function ReadingPage() {
     <section className="reflection-section">
       <header className="reflection-heading"><p className="eyebrow">Optional / DeepSeek</p><h2>{t("result.reflection")}</h2></header>
       <div className="reflection-content">{reading.reflection ? <ReflectionArticle reflection={reading.reflection} />
-        : !consentOpen ? <button className="button primary" onClick={() => setConsentOpen(true)}>{t("result.askReflection")}</button>
-          : <div className="consent-card glass-panel"><h3>{t("consent.title")}</h3><p>{t("consent.body")}</p><label className="check-row important"><input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} /><span>{t("consent.facts")}</span></label><label className="check-row"><input type="checkbox" checked={includeQuestion} onChange={(event) => setIncludeQuestion(event.target.checked)} /><span>{t("consent.question")}</span></label><label className="check-row"><input type="checkbox" checked={includeSources} onChange={(event) => setIncludeSources(event.target.checked)} /><span>{t("consent.sources")}</span></label>{!session && <Turnstile action="guest_ai" onToken={setTurnstile} resetKey={turnstileReset} />}<div className="button-row"><button className="button quiet" onClick={() => setConsentOpen(false)}>{t("consent.decline")}</button><button className="button primary" disabled={!agreed || busy || (!session && !turnstile)} onClick={() => void reflection()}>{busy ? t("common.loading") : t("consent.submit")}</button></div></div>}
+        : !consentOpen ? <button className="button primary" disabled={busy} onClick={() => reading.aiConsentScope ? void reflection(reading.aiConsentScope) : setConsentOpen(true)}>{busy ? t("common.loading") : t(reading.aiConsentScope ? "consent.create" : "result.askReflection")}</button>
+          : <ConsentCard agreed={agreed} onAgreementChange={setAgreed} onCancel={() => setConsentOpen(false)} onSubmit={() => void reflection()} submitLabel={busy ? t("common.loading") : t("consent.submit")} disabled={busy || (!session && !turnstile)}>{!session && <Turnstile action="guest_ai" onToken={setTurnstile} resetKey={turnstileReset} />}</ConsentCard>}
       </div>
     </section>
     {error && <p className="form-error" role="alert">{error}</p>}
     <section className="result-actions task-actions glass-panel">
       <div><h2>{session ? t("result.archive") : t("auth.needAccount")}</h2></div>
-      <div className="button-row wrap"><button className="button secondary" disabled={busy || Boolean(archiveId)} onClick={() => void archive()}>{archiveId ? t("result.archived") : t("result.archive")}</button><button className="button primary" onClick={openChat}>{t("result.chat")}</button></div>
+      <div className="button-row wrap"><button className="button secondary" disabled={busy || Boolean(archiveId)} onClick={() => void archive()}>{archiveId ? t("result.archived") : t("result.archive")}</button><button className="button primary" disabled={busy} onClick={openChat}>{busy ? t("common.loading") : t("result.chat")}</button></div>
     </section>
-    {chatOpen && <section className="consent-card glass-panel"><h3>{t("consent.title")}</h3><p>{t("chat.intro")}</p><label className="check-row important"><input type="checkbox" checked={chatAgreed} onChange={(event) => setChatAgreed(event.target.checked)} /><span>{t("consent.facts")}</span></label><label className="check-row"><input type="checkbox" checked={chatQuestion} onChange={(event) => setChatQuestion(event.target.checked)} /><span>{t("consent.question")}</span></label><label className="check-row"><input type="checkbox" checked={chatSources} onChange={(event) => setChatSources(event.target.checked)} /><span>{t("consent.sources")}</span></label><div className="button-row"><button className="button quiet" onClick={() => setChatOpen(false)}>{t("common.cancel")}</button><button className="button primary" disabled={!chatAgreed || busy} onClick={() => void startChat()}>{t("result.chat")}</button></div></section>}
+    {chatOpen && <ConsentCard agreed={chatAgreed} onAgreementChange={setChatAgreed} onCancel={() => setChatOpen(false)} onSubmit={() => void startChat()} submitLabel={busy ? t("common.loading") : t("consent.chatSubmit")} disabled={busy} />}
     {archiveId && <ShareActions archiveId={archiveId} facts={facts} hasReflection={Boolean(reading.reflection) && reading.reflectionShareEligible === true} />}
   </article>;
+}
+
+function ConsentCard({ agreed, onAgreementChange, onCancel, onSubmit, submitLabel, disabled, children }: {
+  agreed: boolean;
+  onAgreementChange: (agreed: boolean) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+  submitLabel: string;
+  disabled: boolean;
+  children?: ReactNode;
+}) {
+  const { t } = useTranslation();
+  const titleId = useId();
+  return <section className="consent-card glass-panel" aria-labelledby={titleId}>
+    <h3 id={titleId}>{t("consent.title")}</h3>
+    <p>{t("consent.body")}</p>
+    <p className="consent-scope-title">{t("consent.scopeTitle")}</p>
+    <ul className="consent-scope"><li>{t("consent.facts")}</li><li>{t("consent.question")}</li><li>{t("consent.sources")}</li></ul>
+    <label className="check-row important"><input type="checkbox" checked={agreed} onChange={(event) => onAgreementChange(event.target.checked)} /><span>{t("consent.agree")}</span></label>
+    {children}
+    <div className="button-row"><button className="button quiet" onClick={onCancel}>{t("consent.decline")}</button><button className="button primary" disabled={!agreed || disabled} onClick={onSubmit}>{submitLabel}</button></div>
+  </section>;
 }
 
 type TakashimaTextBlock =

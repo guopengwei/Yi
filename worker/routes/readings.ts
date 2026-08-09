@@ -161,6 +161,8 @@ routes.post("/:id/reflection", async (c) => {
     ? { kind: "question" as const, text: reading.question_text }
     : { kind: "none" as const };
   const sources = await localizedSourceSnapshot(c.env, reading.source_snapshot_json, consent.includeSourceMaterial, requestLocale(c));
+  const includedQuestion = consent.includeQuestion && question.kind === "question";
+  const includedSourceMaterial = consent.includeSourceMaterial && sources.length > 0;
   let providerEligible = !safety.routed && sources.length > 0 && await isProviderEnabled(c.env);
   const operationId = crypto.randomUUID();
   let budget: Awaited<ReturnType<typeof reserveBudget>> | null = null;
@@ -200,9 +202,22 @@ routes.post("/:id/reflection", async (c) => {
   const reflectionJson = JSON.stringify(result.reflection);
   const writes = await c.env.DB.batch([
     c.env.DB.prepare(`
-      UPDATE reading_operations SET reflection_json = ?, reflection_included_question = ?, prompt_version = ?, model_version = ?, updated_at = ?
+      UPDATE reading_operations SET reflection_json = ?, reflection_included_question = ?, reflection_included_source_material = ?, ai_consent_granted = 1,
+        ai_consent_included_question = ?, ai_consent_included_source_material = ?, prompt_version = ?, model_version = ?, updated_at = ?
       WHERE id = ? AND identity_key = ? AND reflection_json IS ?
-    `).bind(reflectionJson, consent.includeQuestion ? 1 : 0, REFLECTION_PROMPT_VERSION, DEEPSEEK_MODEL, now, reading.id, identity.key, reading.reflection_json),
+    `).bind(
+      reflectionJson,
+      includedQuestion ? 1 : 0,
+      includedSourceMaterial ? 1 : 0,
+      includedQuestion ? 1 : 0,
+      includedSourceMaterial ? 1 : 0,
+      REFLECTION_PROMPT_VERSION,
+      DEEPSEEK_MODEL,
+      now,
+      reading.id,
+      identity.key,
+      reading.reflection_json,
+    ),
     c.env.DB.prepare(`
       INSERT INTO ai_operations(
         id, reading_operation_id, user_id, identity_key, operation_kind, model_version, prompt_version,

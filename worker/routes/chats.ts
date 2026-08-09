@@ -73,11 +73,12 @@ routes.post("/", async (c) => {
       ? { kind: "question", text: fullReading.question_text }
       : { kind: "none" }
     : { kind: "withheld" };
+  const sources = await localizedSourceSnapshot(c.env, fullReading.source_snapshot_json, body.includeSourceMaterial, requestLocale(c));
   const context: ChatContext = {
     facts: JSON.parse(fullReading.facts_json) as CastFacts,
     reflection: fullReading.reflection_json ? JSON.parse(fullReading.reflection_json) as AiReflection : null,
     question,
-    sources: await localizedSourceSnapshot(c.env, fullReading.source_snapshot_json, body.includeSourceMaterial, requestLocale(c)),
+    sources,
     locale: requestLocale(c),
     safetyRouted: safety.routed === true,
   };
@@ -94,6 +95,11 @@ routes.post("/", async (c) => {
     await c.env.DB.prepare("DELETE FROM chat_conversations WHERE id = ? AND user_id = ?").bind(conversationId, session.user.id).run();
     throw new ApiError("CHAT_INITIALIZE_FAILED", 503, "Conversation could not be initialized.", true);
   }
+  await c.env.DB.prepare(`
+    UPDATE reading_operations
+    SET ai_consent_granted = 1, ai_consent_included_question = ?, ai_consent_included_source_material = ?, updated_at = ?
+    WHERE id = ? AND user_id = ?
+  `).bind(question.kind === "question" ? 1 : 0, sources.length > 0 ? 1 : 0, Date.now(), reading.id, session.user.id).run();
   return c.json({ schemaVersion: "chat@1", id: conversationId, archiveId }, 201);
 });
 
