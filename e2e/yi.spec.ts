@@ -64,6 +64,42 @@ test("changes language immediately from the settings page", async ({ page }) => 
   await expect.poll(() => page.evaluate(() => localStorage.getItem("yi-locale"))).toBe("zh-CN");
 });
 
+test("serves region-correct Chinese fonts from Yi's own origin", async ({ page }) => {
+  const fontRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.resourceType() === "font") fontRequests.push(request.url());
+  });
+
+  await useLocale(page, "zh-HK");
+  await page.goto("/");
+  await page.evaluate(async () => {
+    await Promise.all([
+      document.fonts.load('400 16px "Noto Sans HK Variable"', "設定與閱讀"),
+      document.fonts.load('500 32px "Noto Serif HK Variable"', "先把問題放在光裡"),
+    ]);
+  });
+  await expect(page.locator("html")).toHaveCSS("font-family", /Noto Sans HK Variable/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCSS("font-family", /Noto Serif HK Variable/);
+
+  await selectLocale(page, "zh-CN");
+  await page.evaluate(async () => {
+    await Promise.all([
+      document.fonts.load('400 16px "Noto Sans SC Variable"', "设置与阅读"),
+      document.fonts.load('500 32px "Noto Serif SC Variable"', "先把问题放在光里"),
+    ]);
+  });
+  await expect(page.locator("html")).toHaveCSS("font-family", /Noto Sans SC Variable/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCSS("font-family", /Noto Serif SC Variable/);
+
+  const appOrigin = new URL(page.url()).origin;
+  expect(fontRequests.length).toBeGreaterThan(0);
+  expect(fontRequests.every((url) => new URL(url).origin === appOrigin)).toBe(true);
+  expect(fontRequests.some((url) => url.includes("/assets/fonts/noto-sans-hk-5.3.0/"))).toBe(true);
+  expect(fontRequests.some((url) => url.includes("/assets/fonts/noto-serif-hk-5.3.0/"))).toBe(true);
+  expect(fontRequests.some((url) => url.includes("/assets/fonts/noto-sans-sc-5.3.0/"))).toBe(true);
+  expect(fontRequests.some((url) => url.includes("/assets/fonts/noto-serif-sc-5.3.0/"))).toBe(true);
+});
+
 test("completes a reviewed three-number cast with HK$0", async ({ page }) => {
   await useLocale(page, "en");
   await page.goto("/");

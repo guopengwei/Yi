@@ -16,8 +16,9 @@
   --radius-surface: 18px;
   --radius-control: 12px;
   --radius-pill: 999px;
-  --serif: "Noto Serif TC", "Iowan Old Style", "Songti TC", Georgia, serif;
-  --sans: "Avenir Next", Avenir, "PingFang TC", "Segoe UI", system-ui, sans-serif;
+  --serif: "Noto Serif HK Variable", "Noto Serif HK", "Songti HK", "Songti TC", Georgia, serif;
+  --sans: "Noto Sans HK Variable", "Noto Sans HK", "PingFang HK", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --heading-tracking: -.018em;
   font-family: var(--sans);
   font-size: 16px;
   color: var(--ink);
@@ -26,6 +27,15 @@
   text-rendering: optimizeLegibility;
 }
 
+:root:lang(zh-CN) {
+  --serif: "Noto Serif SC Variable", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
+  --sans: "Noto Sans SC Variable", "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+:root:lang(en) {
+  --serif: "Iowan Old Style", Georgia, serif;
+  --sans: "Avenir Next", Avenir, "Segoe UI", system-ui, sans-serif;
+  --heading-tracking: -.035em;
+}
 :root[data-font="small"] { font-size: 14px; }
 :root[data-font="large"] { font-size: 18px; }
 :root[data-theme="dark"] {
@@ -46,7 +56,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 a { color: inherit; }
 h1, h2, h3, p { margin-top: 0; }
-h1, h2, h3 { font-family:var(--serif); font-weight:500; letter-spacing:-.035em; text-wrap:balance; }
+h1, h2, h3 { font-family:var(--serif); font-weight:500; letter-spacing:var(--heading-tracking); text-wrap:balance; }
 p { line-height: 1.72; }
 ::selection { background:color-mix(in srgb,var(--accent) 24%,transparent); }
 :focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 70%, white); outline-offset: 3px; }
