@@ -54,6 +54,16 @@ test("persists an explicit locale selection", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Place the question");
 });
 
+test("changes language immediately from the settings page", async ({ page }) => {
+  await useLocale(page, "en");
+  await page.goto("/settings");
+
+  await page.getByRole("radio", { name: "简体中文" }).check();
+
+  await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("yi-locale"))).toBe("zh-CN");
+});
+
 test("completes a reviewed three-number cast with HK$0", async ({ page }) => {
   await useLocale(page, "en");
   await page.goto("/");
