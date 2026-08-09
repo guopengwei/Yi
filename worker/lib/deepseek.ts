@@ -182,14 +182,14 @@ function deterministicCopy(facts: CastFacts, locale: Locale, reason: string): Ai
     : locale === "en" ? "none" : "無";
   const localized = {
     "zh-HK": {
-      summary: `${primaryName} 變為 ${relatingName}。此處只呈現可重現的卦象事實。`,
-      perspective: `動爻位置：${moving}。來源目錄或 AI 暫不可用，因此沒有生成來源解讀；你仍可從問題的界線、可驗證事實與下一個小步驟自行反思。`,
+      summary: `${primaryName} 變為 ${relatingName}。這裡只呈現可重現的卦象事實。`,
+      perspective: `動爻位置：${moving}。來源目錄與 AI 暫時不可用，因此沒有生成來源解讀；你仍然可以從問題的界線、可驗證的事實，以及下一個小步驟出發，自行反思。`,
       questions: ["目前最需要釐清的是事實、感受，還是選擇？", "哪一個最小行動既可逆又能帶來新資訊？"],
       caution: "不要把卦象當作預測、診斷或專業建議。",
     },
     "zh-CN": {
-      summary: `${primaryName} 变为 ${relatingName}。此处只呈现可重现的卦象事实。`,
-      perspective: `动爻位置：${moving}。来源目录或 AI 暂不可用，因此没有生成来源解读；你仍可从问题的边界、可验证事实与下一个小步骤自行反思。`,
+      summary: `${primaryName} 变为 ${relatingName}。这里只呈现可重现的卦象事实。`,
+      perspective: `动爻位置：${moving}。来源目录与 AI 暂时不可用，因此没有生成来源解读；你仍然可以从问题的边界、可验证的事实，以及下一个小步骤出发，自行反思。`,
       questions: ["目前最需要厘清的是事实、感受，还是选择？", "哪一个最小行动既可逆又能带来新信息？"],
       caution: "不要把卦象当作预测、诊断或专业建议。",
     },
@@ -324,8 +324,8 @@ export async function createChatReply(env: Env, input: {
     content: input.context.locale === "en"
       ? `I can help you examine the reading facts, but the reviewed source-grounded AI service is unavailable (${reason}). What part of the situation is within your control today?`
       : input.context.locale === "zh-CN"
-        ? `我可以陪你梳理卦象事实，但经审核、基于来源的 AI 服务目前不可用（${reason}）。今天有哪些部分是你可以控制的？`
-        : `我可以陪你梳理卦象事實，但經審核、以來源為依據的 AI 服務目前不可用（${reason}）。今天有哪些部分是你可以控制的？`,
+        ? `我可以陪你梳理卦象事实，不过经审核、基于来源的 AI 服务目前不可用（${reason}）。今天有哪些部分，是你可以掌控的？`
+        : `我可以陪你梳理卦象事實，不過經審核、以來源為依據的 AI 服務目前不可用（${reason}）。今天有哪些部分，是你可以掌控的？`,
     fallbackReason: reason,
     usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, spendMicros: 0 },
     latencyMs: Date.now() - startedAt,
