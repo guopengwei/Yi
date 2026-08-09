@@ -119,8 +119,14 @@ test("completes a reviewed three-number cast with HK$0", async ({ page }) => {
   await expect(page.getByText("Lines are shown bottom to top.")).toBeVisible();
   await page.getByRole("button", { name: "Confirm and choose contribution" }).click();
   await expect(page.getByRole("heading", { name: "Voluntary contribution" }).last()).toBeVisible();
+  await page.evaluate(() => {
+    document.documentElement.style.scrollBehavior = "auto";
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    document.documentElement.style.removeProperty("scroll-behavior");
+  });
   await page.getByRole("button", { name: "Complete and view result" }).click();
   await expect(page).toHaveURL(/\/reading\/[0-9a-f-]+$/);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(page.getByText(/Reproducible facts/).first()).toBeVisible();
   await expect(page.getByText("Source catalog under review", { exact: true })).toBeVisible();
 });
