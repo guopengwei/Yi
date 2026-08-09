@@ -32,6 +32,42 @@ export interface ReadingRow {
   expires_at: number | null;
 }
 
+const RETRYABLE_REFLECTION_FALLBACKS = new Set([
+  "ai-disabled",
+  "provider-unconfigured",
+  "provider-timeout",
+  "provider-failure",
+  "provider-empty",
+  "fabricated-source",
+  "grounding-mismatch",
+]);
+
+export function isRetryableReflectionFallback(reason: string | null): boolean {
+  return reason !== null && RETRYABLE_REFLECTION_FALLBACKS.has(reason);
+}
+
+export async function reflectionCacheDecision(env: Env, row: ReadingRow): Promise<{
+  reflectionJson: string | null;
+  retryOfFailedReservationId: string | null;
+}> {
+  if (!row.reflection_json) return { reflectionJson: null, retryOfFailedReservationId: null };
+  const latest = await env.DB.prepare(`
+    SELECT id, status, error_code
+    FROM ai_operations
+    WHERE reading_operation_id = ? AND operation_kind = 'reflection'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).bind(row.id).first<{ id: string; status: string; error_code: string | null }>();
+  if (latest?.status === "fallback" && isRetryableReflectionFallback(latest.error_code)) {
+    return { reflectionJson: null, retryOfFailedReservationId: latest.id };
+  }
+  return { reflectionJson: row.reflection_json, retryOfFailedReservationId: null };
+}
+
+export async function reusableReflectionJson(env: Env, row: ReadingRow): Promise<string | null> {
+  return (await reflectionCacheDecision(env, row)).reflectionJson;
+}
+
 export async function ownedReading(c: Context<{ Bindings: Env; Variables: AppVariables }>, id: string, identity: Identity): Promise<ReadingRow> {
   const row = await c.env.DB.prepare("SELECT * FROM reading_operations WHERE id = ? AND identity_key = ?")
     .bind(id, identity.key).first<ReadingRow>();
@@ -57,12 +93,13 @@ export async function publicReading(env: Env, row: ReadingRow, locale: Locale) {
   if (row.status !== "ready") return base;
   const facts = JSON.parse(row.facts_json) as CastFacts;
   const sources = await localizedSourceSnapshot(env, row.source_snapshot_json, true, locale);
+  const reflectionJson = await reusableReflectionJson(env, row);
   return {
     ...base,
     facts,
     takashimaInterpretations: mappedTakashimaInterpretations(sources, facts),
-    reflection: row.reflection_json ? JSON.parse(row.reflection_json) as unknown : null,
-    reflectionShareEligible: Boolean(row.reflection_json) && row.reflection_included_question !== 1,
+    reflection: reflectionJson ? JSON.parse(reflectionJson) as unknown : null,
+    reflectionShareEligible: Boolean(reflectionJson) && row.reflection_included_question !== 1,
     safety: JSON.parse(row.safety_json) as unknown,
   };
 }

@@ -68,6 +68,57 @@ describe("Worker reading lifecycle", () => {
     expect(ready.facts.cast.changingPositions).toEqual([1]);
     expect(ready.takashimaInterpretations).toEqual([]);
 
+    const identity = await env.DB.prepare("SELECT identity_key FROM reading_operations WHERE id = ?")
+      .bind(operation.id).first<{ identity_key: string }>();
+    const fallbackReflection = JSON.stringify({
+      schemaVersion: "ai-reflection@1",
+      summary: "Temporary fallback",
+      perspective: "The provider timed out.",
+      questionsToConsider: ["What can be retried?"],
+      cautions: [],
+      sourceRefs: [],
+      grounding: { primaryPattern: "000111", relatingPattern: "000101", changingPositions: [1] },
+    });
+    const fallbackCreatedAt = Date.now();
+    await env.DB.batch([
+      env.DB.prepare("UPDATE reading_operations SET reflection_json = ?, updated_at = ? WHERE id = ?")
+        .bind(fallbackReflection, fallbackCreatedAt, operation.id),
+      env.DB.prepare(`
+        INSERT INTO ai_operations(
+          id, reading_operation_id, identity_key, operation_kind, model_version, prompt_version,
+          status, safety_outcome, input_tokens, output_tokens, spend_micros, latency_ms, error_code, created_at
+        ) VALUES (?, ?, ?, 'reflection', 'deepseek-v4-flash', 'yi-reflection@3',
+          'fallback', 'clear', 0, 0, 0, 20000, 'provider-timeout', ?)
+      `).bind(crypto.randomUUID(), operation.id, identity!.identity_key, fallbackCreatedAt),
+    ]);
+
+    const retryableResult = await SELF.fetch(`https://example.test/api/v1/readings/${operation.id}`, { headers: { Cookie: cookie! } });
+    expect((await retryableResult.json<{ reflection: unknown }>()).reflection).toBeNull();
+
+    const successfulReflection = JSON.stringify({
+      schemaVersion: "ai-reflection@1",
+      summary: "Generated reflection",
+      perspective: "A grounded reflection.",
+      questionsToConsider: ["What is the next step?"],
+      cautions: [],
+      sourceRefs: [],
+      grounding: { primaryPattern: "000111", relatingPattern: "000101", changingPositions: [1] },
+    });
+    await env.DB.batch([
+      env.DB.prepare("UPDATE reading_operations SET reflection_json = ?, updated_at = ? WHERE id = ?")
+        .bind(successfulReflection, fallbackCreatedAt + 1, operation.id),
+      env.DB.prepare(`
+        INSERT INTO ai_operations(
+          id, reading_operation_id, identity_key, operation_kind, model_version, prompt_version,
+          status, safety_outcome, input_tokens, output_tokens, spend_micros, latency_ms, error_code, created_at
+        ) VALUES (?, ?, ?, 'reflection', 'deepseek-v4-flash', 'yi-reflection@3',
+          'success', 'clear', 100, 200, 50, 42000, NULL, ?)
+      `).bind(crypto.randomUUID(), operation.id, identity!.identity_key, fallbackCreatedAt + 1),
+    ]);
+
+    const cachedResult = await SELF.fetch(`https://example.test/api/v1/readings/${operation.id}`, { headers: { Cookie: cookie! } });
+    expect((await cachedResult.json<{ reflection: { summary: string } }>()).reflection.summary).toBe("Generated reflection");
+
     const duplicateComplete = await SELF.fetch(`https://example.test/api/v1/readings/${operation.id}/contribution`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Cookie: cookie!, "Idempotency-Key": contributionKey },
@@ -309,6 +360,22 @@ describe("Stripe webhook authority", () => {
 });
 
 describe("Durable Object contracts", () => {
+  it("restores individual allowance after a provider failure", async () => {
+    const coordinator = env.BUDGET.getByName(`failure-retry-${crypto.randomUUID()}`);
+    const firstReservationId = crypto.randomUUID();
+    expect(await coordinator.reserve({
+      reservationId: firstReservationId, identityKey: "guest:retry", kind: "reflection", individualLimit: 1,
+      estimatedTokens: 100, estimatedSpendMicros: 20, globalTokenLimit: 1_000, globalSpendMicrosLimit: 1_000,
+      maxConcurrency: 1, enforceGlobal: true,
+    })).toMatchObject({ ok: true, remaining: 0 });
+    await coordinator.reconcile({ reservationId: firstReservationId, actualTokens: 0, actualSpendMicros: 0, outcome: "failure" });
+    expect(await coordinator.reserve({
+      reservationId: crypto.randomUUID(), identityKey: "guest:retry", kind: "reflection", individualLimit: 1,
+      estimatedTokens: 100, estimatedSpendMicros: 20, globalTokenLimit: 1_000, globalSpendMicrosLimit: 1_000,
+      maxConcurrency: 1, enforceGlobal: true,
+    })).toMatchObject({ ok: true, remaining: 0 });
+  });
+
   it("reserves daily quotas atomically and reconciles concurrency and actual usage", async () => {
     const coordinator = env.BUDGET.getByName(`test-${crypto.randomUUID()}`);
     const reservationId = crypto.randomUUID();

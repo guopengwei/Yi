@@ -12,6 +12,7 @@ export interface ReservationRequest {
   globalSpendMicrosLimit: number;
   maxConcurrency: number;
   enforceGlobal: boolean;
+  retryOfFailedReservationId?: string;
 }
 
 export interface ReservationResult {
@@ -49,6 +50,9 @@ export class BudgetCoordinator extends DurableObject<Env> {
           enforce_global INTEGER NOT NULL,
           status TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS released_failures (
+          reservation_id TEXT PRIMARY KEY
+        );
       `);
     });
   }
@@ -67,6 +71,25 @@ export class BudgetCoordinator extends DurableObject<Env> {
     }
     const existing = this.ctx.storage.sql.exec<{ status: string }>("SELECT status FROM reservations WHERE id = ?", input.reservationId).toArray()[0];
     if (existing) return { ok: existing.status === "reserved" || existing.status === "reconciled" };
+
+    if (input.retryOfFailedReservationId) {
+      const failed = this.ctx.storage.sql.exec<{ identity_key: string; kind: string; status: string }>(
+        "SELECT identity_key, kind, status FROM reservations WHERE id = ?",
+        input.retryOfFailedReservationId,
+      ).toArray()[0];
+      const released = this.ctx.storage.sql.exec<{ reservation_id: string }>(
+        "SELECT reservation_id FROM released_failures WHERE reservation_id = ?",
+        input.retryOfFailedReservationId,
+      ).toArray()[0];
+      if (failed?.status === "failed" && failed.identity_key === input.identityKey && failed.kind === input.kind && !released) {
+        this.ctx.storage.sql.exec(
+          "UPDATE identity_usage SET count = max(0, count - 1) WHERE identity_key = ? AND kind = ?",
+          input.identityKey,
+          input.kind,
+        );
+        this.ctx.storage.sql.exec("INSERT INTO released_failures(reservation_id) VALUES (?)", input.retryOfFailedReservationId);
+      }
+    }
 
     const individual = this.ctx.storage.sql.exec<{ count: number }>(
       "SELECT count FROM identity_usage WHERE identity_key = ? AND kind = ?",
@@ -122,6 +145,18 @@ export class BudgetCoordinator extends DurableObject<Env> {
             concurrency = max(0, concurrency - 1)
         WHERE singleton = 1
       `, input.actualTokens, reservation.estimated_tokens, input.actualSpendMicros, reservation.estimated_spend_micros);
+    }
+    if (input.outcome === "failure") {
+      const failed = this.ctx.storage.sql.exec<{ identity_key: string; kind: string }>(
+        "SELECT identity_key, kind FROM reservations WHERE id = ?",
+        input.reservationId,
+      ).one();
+      this.ctx.storage.sql.exec(
+        "UPDATE identity_usage SET count = max(0, count - 1) WHERE identity_key = ? AND kind = ?",
+        failed.identity_key,
+        failed.kind,
+      );
+      this.ctx.storage.sql.exec("INSERT OR IGNORE INTO released_failures(reservation_id) VALUES (?)", input.reservationId);
     }
     this.ctx.storage.sql.exec(`
       UPDATE reservations

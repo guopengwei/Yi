@@ -16,6 +16,7 @@ export async function reserveBudget(env: Env, input: {
   estimatedTokens: number;
   estimatedSpendMicros: number;
   enforceGlobal: boolean;
+  retryOfFailedReservationId?: string;
 }) {
   const date = new Date().toISOString().slice(0, 10);
   const coordinator = env.BUDGET.getByName(date);

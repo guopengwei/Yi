@@ -7,8 +7,9 @@ import type { Env } from "../env";
 
 export const DEEPSEEK_MODEL = "deepseek-v4-flash" as const;
 export const REFLECTION_PROMPT_VERSION = "yi-reflection@3" as const;
-export const REFLECTION_MAX_OUTPUT_TOKENS = 8_000;
+export const REFLECTION_MAX_OUTPUT_TOKENS = 32_000;
 export const CHAT_PROMPT_VERSION = "yi-chat@3" as const;
+export const DEEPSEEK_TIMEOUT_MS = 90_000;
 
 const INPUT_CACHE_HIT_MICROS_PER_MILLION = 2_800;
 const INPUT_CACHE_MISS_MICROS_PER_MILLION = 140_000;
@@ -175,7 +176,7 @@ function normalizeProviderReflection(value: unknown): unknown {
   };
 }
 
-function deterministicCopy(facts: CastFacts, locale: Locale, reason: string): AiReflection {
+function deterministicCopy(facts: CastFacts, locale: Locale, reason: string, sourceAvailable: boolean): AiReflection {
   const primaryName = facts.primary.names[locale];
   const relatingName = facts.relating.names[locale];
   const moving = facts.cast.changingPositions.length > 0
@@ -184,19 +185,25 @@ function deterministicCopy(facts: CastFacts, locale: Locale, reason: string): Ai
   const localized = {
     "zh-HK": {
       summary: `${primaryName} 變為 ${relatingName}。這裡只呈現可重現的卦象事實。`,
-      perspective: `動爻位置：${moving}。來源目錄與 AI 暫時不可用，因此沒有生成來源解讀；你仍然可以從問題的界線、可驗證的事實，以及下一個小步驟出發，自行反思。`,
+      perspective: sourceAvailable
+        ? `動爻位置：${moving}。AI 解讀暫時未能生成；經審核的來源目錄仍然可用，你可以先參考上方的來源解讀，並從問題的界線、可驗證的事實，以及下一個小步驟出發，自行反思。`
+        : `動爻位置：${moving}。來源目錄與 AI 暫時不可用，因此沒有生成來源解讀；你仍然可以從問題的界線、可驗證的事實，以及下一個小步驟出發，自行反思。`,
       questions: ["目前最需要釐清的是事實、感受，還是選擇？", "哪一個最小行動既可逆又能帶來新資訊？"],
       caution: "不要把卦象當作預測、診斷或專業建議。",
     },
     "zh-CN": {
       summary: `${primaryName} 变为 ${relatingName}。这里只呈现可重现的卦象事实。`,
-      perspective: `动爻位置：${moving}。来源目录与 AI 暂时不可用，因此没有生成来源解读；你仍然可以从问题的边界、可验证的事实，以及下一个小步骤出发，自行反思。`,
+      perspective: sourceAvailable
+        ? `动爻位置：${moving}。AI 解读暂时未能生成；经审核的来源目录仍然可用，你可以先参考上方的来源解读，并从问题的边界、可验证的事实，以及下一个小步骤出发，自行反思。`
+        : `动爻位置：${moving}。来源目录与 AI 暂时不可用，因此没有生成来源解读；你仍然可以从问题的边界、可验证的事实，以及下一个小步骤出发，自行反思。`,
       questions: ["目前最需要厘清的是事实、感受，还是选择？", "哪一个最小行动既可逆又能带来新信息？"],
       caution: "不要把卦象当作预测、诊断或专业建议。",
     },
     en: {
       summary: `${primaryName} changes to ${relatingName}. This is a reproducible statement of the cast only.`,
-      perspective: `Changing line positions: ${moving}. The reviewed source catalog or AI is unavailable, so no sourced interpretation was generated. You can still reflect on the boundary of the question, verifiable facts, and one small next step.`,
+      perspective: sourceAvailable
+        ? `Changing line positions: ${moving}. The AI interpretation could not be generated, but the reviewed source catalog remains available above. You can still reflect on the boundary of the question, verifiable facts, and one small next step.`
+        : `Changing line positions: ${moving}. The reviewed source catalog or AI is unavailable, so no sourced interpretation was generated. You can still reflect on the boundary of the question, verifiable facts, and one small next step.`,
       questions: ["What needs clarity first: facts, feelings, or choices?", "What small, reversible action could produce useful information?"],
       caution: "Do not treat a reading as prediction, diagnosis, or professional advice.",
     },
@@ -251,7 +258,7 @@ export async function createReflection(env: Env, input: {
 }): Promise<ReflectionResult> {
   const startedAt = Date.now();
   const fallback = (reason: string): ReflectionResult => ({
-    reflection: deterministicCopy(input.facts, input.locale, reason),
+    reflection: deterministicCopy(input.facts, input.locale, reason, input.sources.length > 0),
     fallbackReason: reason,
     usage: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, totalTokens: 0, spendMicros: 0 },
     latencyMs: Date.now() - startedAt,
@@ -265,7 +272,7 @@ export async function createReflection(env: Env, input: {
 
   const request = buildDeepSeekRequest(input);
   try {
-    const client = new OpenAI({ apiKey: env.DEEPSEEK_API_KEY, baseURL: "https://api.deepseek.com", timeout: 20_000, maxRetries: 0 });
+    const client = new OpenAI({ apiKey: env.DEEPSEEK_API_KEY, baseURL: "https://api.deepseek.com", timeout: DEEPSEEK_TIMEOUT_MS, maxRetries: 0 });
     const response = await client.responses.create(request as OpenAI.Responses.ResponseCreateParamsNonStreaming);
     const content = response.output_text;
     if (!content) return fallback("provider-empty");
@@ -286,8 +293,8 @@ export async function createReflection(env: Env, input: {
       usage: deepSeekUsage(inputTokens, outputTokens, cachedInputTokens),
       latencyMs: Date.now() - startedAt,
     };
-  } catch {
-    return fallback("provider-failure");
+  } catch (error) {
+    return fallback(error instanceof OpenAI.APIConnectionTimeoutError ? "provider-timeout" : "provider-failure");
   }
 }
 
@@ -346,7 +353,7 @@ export async function createChatReply(env: Env, input: {
   if (!env.DEEPSEEK_API_KEY) return fallback("provider-unconfigured");
   const request = buildChatDeepSeekRequest(input);
   try {
-    const client = new OpenAI({ apiKey: env.DEEPSEEK_API_KEY, baseURL: "https://api.deepseek.com", timeout: 20_000, maxRetries: 0 });
+    const client = new OpenAI({ apiKey: env.DEEPSEEK_API_KEY, baseURL: "https://api.deepseek.com", timeout: DEEPSEEK_TIMEOUT_MS, maxRetries: 0 });
     const response = await client.responses.create(request as OpenAI.Responses.ResponseCreateParamsNonStreaming);
     const parsed = z.object({ reply: z.string().min(1).max(4_000), sourceRefs: z.array(z.string()).max(24) }).strict()
       .parse(JSON.parse(response.output_text));
@@ -361,7 +368,7 @@ export async function createChatReply(env: Env, input: {
       usage: deepSeekUsage(inputTokens, outputTokens, cachedInputTokens),
       latencyMs: Date.now() - startedAt,
     };
-  } catch {
-    return fallback("provider-failure");
+  } catch (error) {
+    return fallback(error instanceof OpenAI.APIConnectionTimeoutError ? "provider-timeout" : "provider-failure");
   }
 }

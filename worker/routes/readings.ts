@@ -13,7 +13,7 @@ import { ApiError } from "../lib/errors";
 import { assertTimezone, clientIp, parseJson, requestLocale } from "../lib/http";
 import { guestIdentity, type Identity } from "../lib/identity";
 import { createCheckoutSession } from "../lib/payments";
-import { archiveReading, ownedReading, publicReading } from "../lib/readings";
+import { archiveReading, ownedReading, publicReading, reflectionCacheDecision } from "../lib/readings";
 import { localizedSourceSnapshot, reviewedSourceSnapshot } from "../lib/source-catalog";
 import { enforceRateLimit } from "../lib/rate-limit";
 import { verifyTurnstile } from "../lib/turnstile";
@@ -147,8 +147,9 @@ routes.post("/:id/reflection", async (c) => {
   const { identity } = await requestIdentity(c);
   const reading = await ownedReading(c, c.req.param("id"), identity);
   if (reading.status !== "ready") throw new ApiError("READING_NOT_READY", 409, "Complete the contribution step first.");
-  if (reading.reflection_json) {
-    return c.json({ schemaVersion: "reflection-operation@1", reflection: JSON.parse(reading.reflection_json), cached: true });
+  const cacheDecision = await reflectionCacheDecision(c.env, reading);
+  if (cacheDecision.reflectionJson) {
+    return c.json({ schemaVersion: "reflection-operation@1", reflection: JSON.parse(cacheDecision.reflectionJson), cached: true });
   }
   if (identity.kind === "guest") {
     await enforceRateLimit(c.env, { bucket: "guest-ai", identity: `${identity.key}:${clientIp(c)}`, limit: 3, windowMs: 24 * 60 * 60 * 1000 });
@@ -176,6 +177,7 @@ routes.post("/:id/reflection", async (c) => {
         registered: identity.kind === "user",
         ...estimate,
         enforceGlobal: true,
+        ...(cacheDecision.retryOfFailedReservationId ? { retryOfFailedReservationId: cacheDecision.retryOfFailedReservationId } : {}),
       });
     } catch (error) {
       if (!(error instanceof ApiError) || error.code === "DAILY_AI_LIMIT") throw error;
@@ -195,11 +197,12 @@ routes.post("/:id/reflection", async (c) => {
     await budget.reconcile(result.usage.totalTokens, result.usage.spendMicros, result.fallbackReason ? "failure" : "success");
   }
   const now = Date.now();
-  await c.env.DB.batch([
+  const reflectionJson = JSON.stringify(result.reflection);
+  const writes = await c.env.DB.batch([
     c.env.DB.prepare(`
       UPDATE reading_operations SET reflection_json = ?, reflection_included_question = ?, prompt_version = ?, model_version = ?, updated_at = ?
-      WHERE id = ? AND identity_key = ? AND reflection_json IS NULL
-    `).bind(JSON.stringify(result.reflection), consent.includeQuestion ? 1 : 0, REFLECTION_PROMPT_VERSION, DEEPSEEK_MODEL, now, reading.id, identity.key),
+      WHERE id = ? AND identity_key = ? AND reflection_json IS ?
+    `).bind(reflectionJson, consent.includeQuestion ? 1 : 0, REFLECTION_PROMPT_VERSION, DEEPSEEK_MODEL, now, reading.id, identity.key, reading.reflection_json),
     c.env.DB.prepare(`
       INSERT INTO ai_operations(
         id, reading_operation_id, user_id, identity_key, operation_kind, model_version, prompt_version,
@@ -223,10 +226,19 @@ routes.post("/:id/reflection", async (c) => {
     ),
     c.env.DB.prepare(`
       UPDATE archived_readings
-      SET reflection_json = ?, reflection_included_question = ?, updated_at = ?
+      SET reflection_json = (SELECT reflection_json FROM reading_operations WHERE id = ?),
+          reflection_included_question = (SELECT reflection_included_question FROM reading_operations WHERE id = ?),
+          updated_at = ?
       WHERE reading_operation_id = ? AND user_id = ?
-    `).bind(JSON.stringify(result.reflection), consent.includeQuestion ? 1 : 0, now, reading.id, identity.userId),
+    `).bind(reading.id, reading.id, now, reading.id, identity.userId),
   ]);
+  if (writes[0]?.meta.changes === 0) {
+    const concurrent = await c.env.DB.prepare("SELECT reflection_json FROM reading_operations WHERE id = ? AND identity_key = ?")
+      .bind(reading.id, identity.key).first<{ reflection_json: string | null }>();
+    if (concurrent?.reflection_json) {
+      return c.json({ schemaVersion: "reflection-operation@1", reflection: JSON.parse(concurrent.reflection_json), cached: true });
+    }
+  }
   return c.json({
     schemaVersion: "reflection-operation@1",
     reflection: result.reflection,

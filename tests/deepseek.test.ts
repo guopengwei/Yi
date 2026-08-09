@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import OpenAI from "openai";
 import { deriveReadingFacts } from "../shared/casting";
 import { readingCreateSchema } from "../shared/contracts";
-import { buildChatDeepSeekRequest, buildDeepSeekRequest, createReflection, estimateDeepSeekReservation, REFLECTION_MAX_OUTPUT_TOKENS, type SourceExcerpt, validateReflectionCandidate } from "../worker/lib/deepseek";
+import { buildChatDeepSeekRequest, buildDeepSeekRequest, createReflection, DEEPSEEK_TIMEOUT_MS, estimateDeepSeekReservation, REFLECTION_MAX_OUTPUT_TOKENS, type SourceExcerpt, validateReflectionCandidate } from "../worker/lib/deepseek";
 import type { Env } from "../worker/env";
 
 const facts = deriveReadingFacts(readingCreateSchema.parse({
@@ -63,6 +64,8 @@ describe("DeepSeek adapter", () => {
   });
   it("builds the exact bounded Responses API request without temperature", () => {
     const body = buildDeepSeekRequest({ facts, question: { kind: "question", text: "What can I clarify?" }, locale: "en", includeQuestion: false, sources: [source] });
+    expect(REFLECTION_MAX_OUTPUT_TOKENS).toBe(32_000);
+    expect(DEEPSEEK_TIMEOUT_MS).toBe(90_000);
     expect(body).toMatchObject({
       model: "deepseek-v4-flash",
       reasoning: { effort: "high" },
@@ -82,6 +85,21 @@ describe("DeepSeek adapter", () => {
     expect(body.instructions).toContain("hexagram entries are compilations");
     expect(body.instructions).toContain("700-1,100 words");
     expect(body.instructions).toContain("6-9 clear paragraphs");
+  });
+
+  it("reports provider timeouts separately and keeps reviewed sources available", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new OpenAI.APIConnectionTimeoutError());
+    const result = await createReflection(env(), {
+      facts,
+      question: { kind: "none" },
+      locale: "en",
+      includeQuestion: false,
+      sources: [source],
+      safetyRouted: false,
+      providerAllowed: true,
+    });
+    expect(result.fallbackReason).toBe("provider-timeout");
+    expect(result.reflection.perspective).toContain("reviewed source catalog remains available");
   });
 
   it.each([
