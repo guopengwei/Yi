@@ -526,6 +526,46 @@ test("keeps multiline chat composition keyboard-friendly", async ({ page }, test
   expect(JSON.parse(sent[0] ?? "{}").content).toBe("First line\nSecond line");
 });
 
+test("shows delivery and response status after sending a chat message", async ({ page }) => {
+  await useLocale(page, "en");
+  await mockSignedIn(page);
+  let replyFromServer: ((payload: Record<string, unknown>) => void) | undefined;
+  let sentMessage: { id: string; content: string } | undefined;
+  await page.routeWebSocket("**/api/v1/chats/**", (socket) => {
+    replyFromServer = (payload) => socket.send(JSON.stringify(payload));
+    socket.send(JSON.stringify({ type: "resume", messages: [] }));
+    socket.onMessage((message) => {
+      sentMessage = JSON.parse(String(message)) as { id: string; content: string };
+    });
+  });
+
+  await page.goto("/chat/chat-status");
+  const input = page.getByLabel("Write what you want to untangle…");
+  await input.fill("What should I notice before deciding?");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  await expect(page.getByText("What should I notice before deciding?")).toBeVisible();
+  await expect(page.getByText("Sending…")).toBeVisible();
+  await expect(input).toBeDisabled();
+  await expect.poll(() => sentMessage?.content).toBe("What should I notice before deciding?");
+
+  replyFromServer?.({
+    type: "ack",
+    message: { seq: 1, id: sentMessage?.id, role: "user", content: sentMessage?.content, createdAt: "2026-08-10T00:00:00.000Z" },
+  });
+  await expect(page.locator(".chat-delivery-status")).toContainText("Sent");
+  await expect(page.getByText("Yi is considering your question…")).toBeVisible();
+
+  replyFromServer?.({ type: "stream-start", seq: 2 });
+  replyFromServer?.({ type: "stream-delta", seq: 2, delta: "Begin with what remains reversible." });
+  replyFromServer?.({
+    type: "stream-end",
+    message: { seq: 2, id: "assistant-1", role: "assistant", content: "Begin with what remains reversible.", createdAt: "2026-08-10T00:00:01.000Z" },
+  });
+  await expect(page.getByText("Begin with what remains reversible.")).toBeVisible();
+  await expect(input).toBeEnabled();
+});
+
 test("captures mobile casting method and review visuals", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile-chromium", "Mobile visual coverage");
   await useLocale(page, "en");
