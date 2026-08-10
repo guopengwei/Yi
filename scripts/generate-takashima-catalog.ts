@@ -206,9 +206,9 @@ async function main() {
         return translated.split("\n", 1)[0]!.trim();
       }).join("\n");
       const prefix = locale === "zh-HK"
-        ? "高島易斷六爻原文彙編（來源資料不含獨立卦辭或大象；完整評註見各爻條目）："
+        ? "高島易斷六爻原文彙編（原典資料不含獨立卦辭或大象；完整評註見各爻條目）："
         : locale === "zh-CN"
-          ? "高岛易断六爻原文汇编（源数据不含独立卦辞或大象；完整评注见各爻条目）："
+          ? "高岛易断六爻原文汇编（原典资料不含独立卦辞或大象；完整评注见各爻条目）："
           : "Takashima Ekidan compilation of the six line texts (the source dataset contains no separate Judgment or Image text; full commentary remains in each line entry):";
       addEntry({
         entryKey: `hexagram:${hexagram.id}`,

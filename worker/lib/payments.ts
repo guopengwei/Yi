@@ -19,7 +19,7 @@ export async function createCheckoutSession(env: Env, input: {
 }) {
   if (!env.STRIPE_SECRET_KEY) throw new ApiError("PAYMENTS_NOT_CONFIGURED", 503, "Payments are not configured.");
   const stripe = stripeClient(env.STRIPE_SECRET_KEY);
-  const names = { "zh-HK": "Yi · 易 自願掛金", "zh-CN": "Yi · 易 随喜赞助", en: "Yi voluntary contribution" };
+  const names = { "zh-HK": "Yi · 易 隨喜贊助", "zh-CN": "Yi · 易 随喜赞助", en: "Yi voluntary contribution" };
   try {
     return await stripe.checkout.sessions.create({
       mode: "payment",
