@@ -14,7 +14,22 @@ export function HelpPage() {
       </aside>
     </div>
     <section className="takashima-intro" aria-labelledby="takashima-title">
-      <p className="eyebrow">{t("help.takashima.eyebrow")}</p>
+      <div className="takashima-media">
+        <p className="eyebrow">{t("help.takashima.eyebrow")}</p>
+        <div className="takashima-video">
+          <iframe
+            src="https://www.youtube-nocookie.com/embed/xJjz7CibOR0"
+            title={t("help.takashima.videoTitle")}
+            loading="lazy"
+            referrerPolicy="strict-origin-when-cross-origin"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+          />
+        </div>
+        <a className="takashima-watch" href="https://www.youtube.com/watch?v=xJjz7CibOR0" target="_blank" rel="noreferrer">
+          {t("help.takashima.videoLink")} <span aria-hidden="true">↗</span>
+        </a>
+      </div>
       <div>
         <h2 id="takashima-title">{t("help.takashima.title")}</h2>
         <p>{t("help.takashima.body")}</p>

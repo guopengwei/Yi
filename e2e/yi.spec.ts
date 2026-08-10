@@ -176,6 +176,8 @@ test("introduces Kaemon Takashima on the About and help page", async ({ page }) 
   await page.goto("/help");
   await expect(page.getByRole("heading", { name: "Kaemon Takashima" })).toBeVisible();
   await expect(page.getByText("Kaemon Takashima (1832–1914)")).toBeVisible();
+  await expect(page.getByTitle("Video about Kaemon Takashima")).toHaveAttribute("src", "https://www.youtube-nocookie.com/embed/xJjz7CibOR0");
+  await expect(page.getByRole("link", { name: /Watch on YouTube/ })).toHaveAttribute("href", "https://www.youtube.com/watch?v=xJjz7CibOR0");
   await expect(page.getByRole("link", { name: /Read the Japanese Wikipedia article/ })).toHaveAttribute("href", "https://ja.wikipedia.org/wiki/%E9%AB%98%E5%B3%B6%E5%98%89%E5%8F%B3%E8%A1%9B%E9%96%80");
 });
 
