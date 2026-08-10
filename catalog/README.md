@@ -13,3 +13,5 @@ That is exactly 1,350 approved entries. Every entry carries its own provenance a
 Validation also rejects English records that retain an untranslated Chinese block, line label, or malformed mixed-language token. `scripts/repair-takashima-english.ts` can rebuild only those records from their approved Simplified Chinese counterparts, update the translation cache and create a new immutable catalog release.
 
 Run `npm run release:catalog` for the non-production structural check. Once the reviewed file and manifest are complete, `npm run release:check` performs the strict check. Import into preview first with `npm run catalog:import:preview`; production import remains behind the same strict gate.
+
+For an approved copy-only correction to an existing normalized artifact, run `npm run catalog:rotate-release`. It preserves catalog content and provenance while assigning a fresh release UUID, release-scoped entry IDs, approval timestamp, and exact-byte hash. Record the approval in `docs/takashima-catalog-approval.md` before importing the new release.

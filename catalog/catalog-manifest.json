@@ -1,11 +1,11 @@
 {
   "schemaVersion": "yi-source-catalog-manifest@1",
-  "releaseId": "9af8e7f7-a596-4486-a344-9d58607ba2dd",
+  "releaseId": "d3abc7e9-cab8-499a-a344-ecb59c0c916e",
   "reviewStatus": "approved",
   "sourceCatalogFile": "source-catalog.json",
-  "contentSha256": "e835dcba46c21ab8432ff2c1042479e1754dcbab1edacce4001e743e8397266f",
+  "contentSha256": "27b46be6b397e622645f2ad32d7f58718a0a35f2412cc45381b77ca6712c01b9",
   "rightsEvidenceUri": "repo://docs/takashima-catalog-approval.md",
   "approvedBy": "Project owner, deployment session",
-  "approvedAt": "2026-08-09T13:40:30.176Z",
-  "notes": "Takashima catalog generated from the project-owner-approved source artifact; English locale coverage was repaired from the approved Simplified Chinese entries and is protected by automated language-quality checks."
+  "approvedAt": "2026-08-10T11:35:17.163Z",
+  "notes": "Immutable release of the Takashima catalog-heading copy correction; line text, translations beneath the headings, provenance, and rights status are unchanged."
 }

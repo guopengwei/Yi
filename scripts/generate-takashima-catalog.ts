@@ -177,12 +177,13 @@ async function main() {
   }
 
   const releaseId = randomUUID();
+  const sourceIdPrefix = `takashima-${releaseId.slice(0, 8)}`;
   const entries: Array<Record<string, unknown>> = [];
   const localeNames = { "zh-HK": "高島易斷", "zh-CN": "高岛易断", en: "Takashima Ekidan" } as const;
   const sourceFileLabel = "Approved repository artifact SHA-256 f5cdf925a53eb1bdf8a07865397112a4bf07c6b089f6055a3b1fc74d197a095f";
   const addEntry = (input: { entryKey: string; entryType: "hexagram" | "line" | "special-line"; locale: "zh-HK" | "zh-CN" | "en"; text: string; locator: string }) => {
     entries.push({
-      id: `takashima-2026-08-08:${input.locale}:${input.entryKey}`,
+      id: `${sourceIdPrefix}:${input.locale}:${input.entryKey}`,
       entryKey: input.entryKey,
       entryType: input.entryType,
       locale: input.locale,
