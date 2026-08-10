@@ -9,6 +9,7 @@ describe("deployment privacy configuration", () => {
     expect(headers).toContain("Content-Security-Policy: default-src 'self'");
     expect(headers).toContain("script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com");
     expect(headers).toContain("connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com");
+    expect(headers).toContain("frame-src https://challenges.cloudflare.com https://www.youtube-nocookie.com");
     expect(headers).toContain("Referrer-Policy: strict-origin");
     expect(headers).toMatch(/\/share\/\*[\s\S]*X-Robots-Tag: noindex, nofollow, noarchive/);
     expect(headers).toMatch(/\/share\/\*[\s\S]*Cache-Control: private, no-store/);
