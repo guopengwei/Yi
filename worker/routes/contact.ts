@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AppVariables, Env } from "../env";
 import { optionalSession } from "../lib/auth";
 import { sendTransactionalEmail } from "../lib/email";
+import { renderContactNotification } from "../lib/email-templates";
 import { clientIp, parseJson } from "../lib/http";
 import { enforceRateLimit } from "../lib/rate-limit";
 import { verifyTurnstile } from "../lib/turnstile";
@@ -17,10 +18,6 @@ const contactSchema = z.object({
   turnstileToken: z.string().max(2048),
 }).strict();
 
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ?? character);
-}
-
 routes.post("/", async (c) => {
   const body = await parseJson(c, contactSchema);
   const ip = clientIp(c);
@@ -32,6 +29,14 @@ routes.post("/", async (c) => {
     INSERT INTO contact_submissions(id, user_id, email, locale, subject, message, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).bind(id, session?.user.id ?? null, body.email, body.locale, body.subject, body.message, Date.now()).run();
+  const notification = renderContactNotification({
+    id,
+    locale: body.locale,
+    email: body.email,
+    subject: body.subject,
+    message: body.message,
+    siteUrl: c.env.APP_ORIGIN,
+  });
   c.executionCtx.waitUntil(Promise.all([
     sendTransactionalEmail(c.env, { to: body.email, kind: "contact-received", locale: body.locale }),
     c.env.EMAIL.send({
@@ -39,8 +44,8 @@ routes.post("/", async (c) => {
       from: { email: c.env.HELLO_EMAIL, name: "Yi · 易 contact" },
       replyTo: body.email,
       subject: `[Yi contact ${id}] ${body.subject}`,
-      text: `Contact ID: ${id}\nLocale: ${body.locale}\nReply to: ${body.email}\n\n${body.message}`,
-      html: `<h1>Yi contact</h1><p><strong>ID:</strong> ${id}</p><p><strong>Locale:</strong> ${body.locale}</p><p><strong>Reply to:</strong> ${escapeHtml(body.email)}</p><hr><p>${escapeHtml(body.message).replace(/\n/g, "<br>")}</p>`,
+      text: notification.text,
+      html: notification.html,
     }),
   ]));
   return c.json({ schemaVersion: "contact@1", id, status: "received" }, 201);

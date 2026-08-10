@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCheckoutSession } from "../worker/lib/payments";
 import { sendTransactionalEmail } from "../worker/lib/email";
+import { renderContactNotification, renderTransactionalEmail, type TransactionalTemplateKind } from "../worker/lib/email-templates";
 import type { Env } from "../worker/env";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -78,5 +79,64 @@ describe("transactional email templates", () => {
       expect(message.from.email).toBe("hello@example.test");
       expect(message.replyTo).toBe("contact@example.test");
     }
+  });
+
+  it("renders every locale and message kind through one email-safe design system", () => {
+    const locales = ["zh-HK", "zh-CN", "en"] as const;
+    const kinds: readonly TransactionalTemplateKind[] = ["verify", "reset", "welcome", "contact-received", "delete"];
+    const actionKinds = new Set<TransactionalTemplateKind>(["verify", "reset", "delete"]);
+    const url = 'https://yi.example.test/action?token=<private>&mode="confirm"';
+
+    for (const locale of locales) {
+      for (const kind of kinds) {
+        const message = renderTransactionalEmail({
+          kind,
+          locale,
+          url: actionKinds.has(kind) ? url : undefined,
+          supportEmail: "contact@example.test",
+          siteUrl: "https://yi.example.test",
+        });
+
+        expect(message.html).toContain("<!doctype html>");
+        expect(message.html).toContain(`<html lang="${locale}">`);
+        expect(message.html).toContain('role="presentation"');
+        expect(message.html).toContain('width="600"');
+        expect(message.html).toContain('name="color-scheme"');
+        expect(message.html).toContain("@media (prefers-color-scheme: dark)");
+        expect(message.html).toContain("mailto:contact@example.test");
+        expect(message.html).not.toMatch(/[—–]/u);
+        expect(message.text).not.toMatch(/[—–]/u);
+        expect(message.html).not.toMatch(/#000000|#ffffff/i);
+        expect(message.html).not.toContain("<img");
+
+        if (actionKinds.has(kind)) {
+          expect(message.text).toContain(url);
+          expect(message.html).not.toContain(url);
+          expect(message.html).toContain("token=&lt;private&gt;&amp;mode=&quot;confirm&quot;");
+        }
+      }
+    }
+  });
+
+  it("renders an escaped and structured contact notification for staff", () => {
+    const notification = renderContactNotification({
+      id: "contact-47",
+      locale: "zh-HK",
+      email: "reader@example.test",
+      subject: '<script>alert("subject")</script>',
+      message: "Hello <b>team</b>\nSecond line & more",
+      siteUrl: "https://yi.example.test",
+    });
+
+    expect(notification.html).toContain("Support inbox");
+    expect(notification.html).toContain("Reply address");
+    expect(notification.html).toContain("Submission ID");
+    expect(notification.html).toContain("contact-47");
+    expect(notification.html).toContain("&lt;script&gt;alert(&quot;subject&quot;)&lt;/script&gt;");
+    expect(notification.html).toContain("Hello &lt;b&gt;team&lt;/b&gt;<br>Second line &amp; more");
+    expect(notification.html).not.toContain("<script>alert");
+    expect(notification.html).not.toContain("<b>team</b>");
+    expect(notification.text).toContain("Subject: <script>");
+    expect(notification.text).toContain("Hello <b>team</b>\nSecond line & more");
   });
 });
